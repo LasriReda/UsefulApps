@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LinkVault</title>
+    <style>
+        :root {
+            --bg: #f1f5f9; --surface: #ffffff; --primary: #3b82f6; --text: #0f172a;
+            --text-secondary: #64748b; --border: #e2e8f0; --danger: #ef4444; --success: #22c55e;
+            --warning: #f59e0b; --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --radius: 12px; --nav-bg: #ffffff;
+        }
+        [data-theme="dark"] {
+            --bg: #0f172a; --surface: #1e293b; --primary: #60a5fa; --text: #f1f5f9;
+            --text-secondary: #94a3b8; --border: #334155; --shadow: 0 4px 6px -1px rgba(0,0,0,0.4);
+            --nav-bg: #1e293b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; -webkit-user-select: none; }
+        
+        nav { background: var(--nav-bg); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow); z-index: 10; flex-shrink: 0; }
+        .logo { font-weight: 800; font-size: 1.2rem; color: var(--primary); }
+        .nav-actions button { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px; font-size: 1.2rem; }
+        
+        main { flex: 1; overflow-y: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
+        
+        .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--nav-bg); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px 0 20px 0; z-index: 10; }
+        .tab-item { display: flex; flex-direction: column; align-items: center; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer; background: none; border: none; }
+        .tab-item.active { color: var(--primary); }
+        .tab-item svg { width: 24px; height: 24px; margin-bottom: 4px; fill: currentColor; }
+
+        .card { 
+            background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; 
+            box-shadow: var(--shadow); border: 1px solid var(--border); cursor: pointer; 
+            transition: transform 0.1s, border-color 0.2s; position: relative; 
+            touch-action: manipulation; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; 
+        }
+        .card:active { transform: scale(0.98); }
+        .card.selected { border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+        
+        .btn { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-danger { background: var(--danger); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); margin-bottom: 12px; }
+        select.input { appearance: none; }
+        .badge { background: var(--primary); color: white; border-radius: 12px; padding: 2px 8px; font-size: 0.75rem; margin-right: 4px; display: inline-block; margin-bottom: 2px;}
+        .badge-warn { background: var(--warning); color: black; }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; display: none; justify-content: center; align-items: center; padding: 20px; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; padding: 24px; }
+        .modal h2 { margin-bottom: 20px; font-size: 1.2rem; }
+        
+        .bulk-bar { position: fixed; bottom: 70px; left: 0; right: 0; background: var(--primary); color: white; padding: 16px; display: none; justify-content: space-around; align-items: center; z-index: 20; box-shadow: 0 -4px 6px rgba(0,0,0,0.2); animation: slideUp 0.2s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .bulk-bar.active { display: flex; }
+        .bulk-bar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .mt-1 { margin-top: 8px; } .mt-2 { margin-top: 16px; } .mb-1 { margin-bottom: 8px; }
+        .text-sm { font-size: 0.85rem; color: var(--text-secondary); }
+        .text-danger { color: var(--danger); }
+        
+        .stat-card { text-align: center; padding: 16px; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); }
+        .stat-num { font-size: 1.5rem; font-weight: 800; color: var(--primary); }
+        
+        .health-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+        .h-healthy { background: var(--success); } .h-warning { background: var(--warning); } .h-broken { background: var(--danger); } .h-unchecked { background: var(--text-secondary); }
+
+        .rule-block { background: var(--bg); border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .bulk-mode-banner { background: var(--warning); color: black; text-align: center; padding: 8px; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; border-radius: 8px; }
+        
+        .icon-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 16px; }
+        .icon-btn { font-size: 1.5rem; background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 8px 0; cursor: pointer; transition: all 0.15s; }
+        .icon-btn.active { background: var(--primary); border-color: var(--primary); color: white; transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">LinkVault</div>
+        <div class="nav-actions">
+            <button onclick="toggleTheme()" title="Toggle Theme">🌓</button>
+            <button onclick="openAddModal()" title="Add Link">➕</button>
+        </div>
+    </nav>
+
+    <main id="content"></main>
+
+    <div class="bulk-bar" id="bulkBar">
+        <span id="bulkCount">0 selected</span>
+        <button onclick="bulkAction('tag')">🏷️ Tag</button>
+        <button onclick="bulkAction('collection')">📁 Collect</button>
+        <button onclick="bulkAction('delete')" style="background:var(--danger)">🗑️ Delete</button>
+        <button onclick="clearBulk()">✖️</button>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-item active" onclick="navigate('home')"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Home</button>
+        <button class="tab-item" onclick="navigate('collections')"><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>Collections</button>
+        <button class="tab-item" onclick="navigate('rules')"><svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>Rules</button>
+        <button class="tab-item" onclick="navigate('stats')"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>Stats</button>
+        <button class="tab-item" onclick="navigate('settings')"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>Settings</button>
+    </div>
+
+    <div class="modal-overlay" id="linkModal">
+        <div class="modal">
+            <h2 id="modalTitle">Add Link</h2>
+            <input type="hidden" id="linkId">
+            <input type="url" id="linkUrl" class="input" placeholder="https://example.com">
+            <input type="text" id="linkTitle" class="input" placeholder="Title">
+            <textarea id="linkDesc" class="input" rows="2" placeholder="Description (optional)"></textarea>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="linkTags" class="input" placeholder="Tags (comma sep)" style="flex:2">
+                <select id="linkCategory" class="input" style="flex:1">
+                    <option value="Articles">Articles</option><option value="Tools">Tools</option><option value="Videos">Videos</option><option value="Docs">Docs</option><option value="Social">Social</option><option value="Shopping">Shopping</option>
+                </select>
+            </div>
+            <div id="collectionsCheckboxes" class="mb-1"></div>
+            <div style="display:flex; gap:10px; margin-bottom:12px;">
+                <label style="flex:1; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="linkFav"> ⭐ Favorite</label>
+                <label style="flex:1; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="linkReadLater"> 📖 Read Later</label>
+            </div>
+            <div id="duplicateWarning" style="display:none; margin-bottom:12px; padding:10px; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; font-size:0.9rem;"></div>
+            <div id="ruleAppliedFeedback" style="display:none; margin-bottom:12px; padding:10px; background:#dcfce7; border:1px solid #22c55e; border-radius:8px; font-size:0.9rem;"></div>
+            <div class="flex-between">
+                <div style="display:flex; gap:10px; width:100%; justify-content:flex-end;">
+					<button id="deleteLinkBtn" class="btn btn-danger" style="display:none; width:auto; padding:10px 20px;" onclick="deleteCurrentLink()">Delete</button>
+                    <button class="btn btn-outline" onclick="closeModal('linkModal')" style="width:auto; padding:10px 20px;">Cancel</button>
+                    <button class="btn" onclick="saveLink()">Save Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="genericModal">
+        <div class="modal"><div id="genericModalContent"></div></div>
+    </div>
+
+<script>
+const DB_NAME = 'LinkVaultDB'; const DB_VERSION = 1; let db;
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('links')) db.createObjectStore('links', { keyPath: 'id' }); if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id' }); if (!db.objectStoreNames.contains('rules')) db.createObjectStore('rules', { keyPath: 'id' }); };
+        request.onsuccess = (e) => { db = e.target.result; resolve(db); }; request.onerror = (e) => reject(e);
+    });
+}
+function dbOp(store, mode, data = null, key = null) {
+    return new Promise((resolve, reject) => { const tx = db.transaction(store, mode); const st = tx.objectStore(store); let req; if (mode === 'readonly' && key) req = st.get(key); else if (mode === 'readonly') req = st.getAll(); else if (data) req = st.put(data); else if (key) req = st.delete(key); req.onsuccess = () => resolve(req.result); req.onerror = (e) => reject(e); });
+}
+const uid = () => crypto.randomUUID ? crypto.randomUUID() : 'id-'+Math.random().toString(36).substr(2, 9);
+const normalizeUrl = (u) => { try { return new URL(u).hostname + new URL(u).pathname; } catch { return u; } };
+const getDomain = (u) => { try { return new URL(u).hostname.replace('www.',''); } catch { return 'invalid'; } };
+const levenshtein = (a,b) => { const m=[]; for(let i=0;i<=b.length;i++)m[i]=[i]; for(let j=0;j<=a.length;j++)m[0][j]=j; for(let i=1;i<=b.length;i++)for(let j=1;j<=a.length;j++){if(b.charAt(i-1)==a.charAt(j-1))m[i][j]=m[i-1][j-1]; else m[i][j]=Math.min(m[i-1][j-1]+1,m[i][j-1]+1,m[i-1][j]+1);} return m[b.length][a.length];};
+
+let currentRoute = 'home'; let bulkSelected = new Set(); let isBulkMode = false;
+let pressTimer = null; let longPressTriggered = false; let touchStartX = 0; let touchStartY = 0; const MOVE_THRESHOLD = 15;
+
+function startPressTimer(cardId) { longPressTriggered = false; pressTimer = setTimeout(() => { longPressTriggered = true; if (!isBulkMode) isBulkMode = true; bulkSelected.add(cardId); updateBulkUI(); render(); if (navigator.vibrate) navigator.vibrate(30); }, 500); }
+function cancelPressTimer() { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }
+
+document.getElementById('content').addEventListener('touchstart', (e) => { if (currentRoute !== 'home') return; const card = e.target.closest('.card'); if (!card) return; const touch = e.touches[0]; touchStartX = touch.clientX; touchStartY = touch.clientY; startPressTimer(card.dataset.id); }, { passive: true });
+document.getElementById('content').addEventListener('touchmove', (e) => { if (!pressTimer) return; const touch = e.touches[0]; if (Math.abs(touch.clientX - touchStartX) > MOVE_THRESHOLD || Math.abs(touch.clientY - touchStartY) > MOVE_THRESHOLD) cancelPressTimer(); }, { passive: true });
+document.getElementById('content').addEventListener('touchend', (e) => { cancelPressTimer(); }, { passive: true });
+document.getElementById('content').addEventListener('touchcancel', (e) => { cancelPressTimer(); }, { passive: true });
+document.getElementById('content').addEventListener('mousedown', (e) => { if (currentRoute !== 'home' || e.button !== 0) return; const card = e.target.closest('.card'); if (!card) return; startPressTimer(card.dataset.id); });
+document.getElementById('content').addEventListener('mousemove', () => { cancelPressTimer(); });
+document.getElementById('content').addEventListener('mouseup', () => { cancelPressTimer(); });
+document.getElementById('content').addEventListener('contextmenu', (e) => { const card = e.target.closest('.card'); if (card && currentRoute === 'home') { e.preventDefault(); if (!isBulkMode) { longPressTriggered = true; isBulkMode = true; bulkSelected.add(card.dataset.id); updateBulkUI(); render(); } } });
+document.getElementById('content').addEventListener('click', (e) => { if (longPressTriggered) { longPressTriggered = false; e.preventDefault(); return; } if (currentRoute !== 'home') return; const card = e.target.closest('.card'); if (!card || !card.dataset.id) return; if (isBulkMode) { const id = card.dataset.id; if (bulkSelected.has(id)) bulkSelected.delete(id); else bulkSelected.add(id); updateBulkUI(); render(); } else { openEditModal(card.dataset.id); } });
+
+function toggleTheme() { const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', t); localStorage.setItem('theme', t); }
+function navigate(route) { currentRoute = route; clearBulk(); document.querySelectorAll('.tab-item').forEach((el, i) => { const routes = ['home','collections','rules','stats','settings']; el.classList.toggle('active', routes[i] === route); }); render(); }
+
+async function render() {
+    const c = document.getElementById('content');
+    let html = '';
+    switch(currentRoute) {
+        case 'home': html = await renderHome(); break;
+        case 'collections': html = await renderCollections(); break;
+        case 'rules': html = await renderRules(); break;
+        case 'stats': html = await renderStats(); break;
+        case 'settings': html = renderSettings(); break;
+    }
+    const spacerHeight = isBulkMode ? 240 : 170;
+    html += `<div style="height: ${spacerHeight}px; flex-shrink: 0; pointer-events: none;"></div>`;
+    c.innerHTML = html;
+}
+
+async function checkDuplicate(url, title, excludeId = null) { const links = await dbOp('links', 'readonly'); const normUrl = normalizeUrl(url); return links.find(l => { if (l.id === excludeId) return false; if (normalizeUrl(l.url) === normUrl) return true; if (getDomain(l.url) === getDomain(url) && levenshtein(l.title.toLowerCase(), title.toLowerCase()) < 4) return true; return false; }); }
+
+async function applyRules(link) { const rules = (await dbOp('rules', 'readonly')).filter(r => r.isEnabled); const appliedActions = []; for (const rule of rules) { let match = true; const opMap = { 'contains': (a,b) => a.includes(b), 'equals': (a,b) => a===b, 'startsWith': (a,b) => a.startsWith(b), 'regex': (a,b) => new RegExp(b, 'i').test(a) }; for (const cond of rule.conditions) { let val = ''; if(cond.field === 'url') val = link.url; if(cond.field === 'domain') val = getDomain(link.url); if(cond.field === 'title') val = link.title; const res = opMap[cond.operator] ? opMap[cond.operator](val.toLowerCase(), cond.value.toLowerCase()) : false; match = cond.logic === 'OR' ? match || res : match && res; } if (match) { for (const act of rule.actions) { if (act.type === 'addTag' && !link.tags.includes(act.value)) { link.tags.push(act.value); appliedActions.push(`Tag: ${act.value}`); } if (act.type === 'setCategory') { link.category = act.value; appliedActions.push(`Category: ${act.value}`); } if (act.type === 'addToCollection' && !link.collections.includes(act.value)) { link.collections.push(act.value); appliedActions.push(`Collection added`); } if (act.type === 'setFavorite') { link.isFavorite = true; appliedActions.push(`⭐ Favorited`); } } rule.matchCount = (rule.matchCount || 0) + 1; rule.lastMatchedAt = new Date().toISOString(); await dbOp('rules', 'readwrite', rule); if (rule.stopOnMatch) break; } } return appliedActions; }
+
+async function renderHome() { const links = await dbOp('links', 'readonly'); const sorted = links.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt)); const banner = isBulkMode ? `<div class="bulk-mode-banner">Select Mode Active: Tap links to select them</div>` : ''; return `${banner}<input type="text" class="input" placeholder="🔍 Search links..." oninput="filterLinks(this.value)" style="margin-bottom:16px; font-size: 1.1rem;"><div id="linksList">${sorted.length === 0 ? '<p class="text-sm" style="text-align:center;margin-top:40px;">No links saved yet. Tap + to add one.</p>' : sorted.map(l => `<div class="card ${bulkSelected.has(l.id) ? 'selected' : ''}" data-id="${l.id}"><div class="flex-between mb-1"><div style="display:flex; align-items:center; gap:8px; overflow:hidden; flex:1;"><span class="health-dot h-${l.linkHealth?.status || 'unchecked'}"></span><strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.title || 'Untitled'}</strong></div><div style="display:flex; gap:6px; flex-shrink:0; margin-left:8px;">${l.isFavorite ? '<span>⭐</span>' : ''}${bulkSelected.has(l.id) ? '<span style="color:var(--primary); font-size:1.2rem;">✓</span>' : ''}</div></div><div class="text-sm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis; margin-bottom:8px;">${getDomain(l.url)}</div><div style="display:flex; gap:4px; flex-wrap:wrap;"><span class="badge">${l.category}</span>${l.tags.slice(0,3).map(t => `<span class="badge badge-warn">${t}</span>`).join('')}${l.isReadLater ? '<span class="badge" style="background:#8b5cf6">📖 Read Later</span>' : ''}</div></div>`).join('')}</div>`; }
+
+function updateBulkUI() { const bar = document.getElementById('bulkBar'); const count = document.getElementById('bulkCount'); if (isBulkMode) { bar.classList.add('active'); count.innerText = `${bulkSelected.size} selected`; } else { bar.classList.remove('active'); } }
+function clearBulk() { isBulkMode = false; bulkSelected.clear(); updateBulkUI(); if(currentRoute === 'home') render(); }
+
+async function bulkAction(type) { 
+    if (bulkSelected.size === 0) return; 
+    if (type === 'delete') { 
+        if(confirm(`Delete ${bulkSelected.size} links permanently?`)) { 
+            for(const id of bulkSelected) await dbOp('links', 'readwrite', null, id); 
+            clearBulk(); 
+        } 
+    } else if (type === 'tag') { 
+        openBulkTagModal(); 
+    } else if (type === 'collection') { 
+        openBulkCollectionModal(); 
+    } 
+}
+
+async function openBulkTagModal() {
+    const links = await dbOp('links', 'readonly');
+    const tagsSet = new Set();
+    links.forEach(l => l.tags.forEach(t => tagsSet.add(t)));
+    const tags = Array.from(tagsSet).sort();
+
+    let html = `<h2>Apply Tag to Selected</h2>`;
+    if (tags.length === 0) {
+        html += `<div style="text-align:center; padding:20px 0;">
+            <p class="text-sm">No tags defined yet.</p>
+            <p class="text-sm">Save links with tags first to see them here.</p>
+        </div>`;
+    } else {
+        html += `<select id="bulkTagSelect" class="input">
+            <option value="" disabled selected>Select an existing tag...</option>
+            ${tags.map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>`;
+    }
+    
+    html += `<div class="flex-between mt-2">
+        <button class="btn btn-outline" onclick="closeModal('genericModal')" style="width:auto;padding:10px 20px;">Cancel</button>
+        <button class="btn" onclick="applyBulkTag()" ${tags.length === 0 ? 'disabled' : ''}>Apply Tag</button>
+    </div>`;
+
+    document.getElementById('genericModalContent').innerHTML = html;
+    openModal('genericModal');
+}
+
+async function applyBulkTag() {
+    const tag = document.getElementById('bulkTagSelect').value;
+    if (!tag) return;
+    const links = await dbOp('links', 'readonly');
+    for(const id of bulkSelected) {
+        let l = links.find(x=>x.id===id);
+        if(l && !l.tags.includes(tag)) { 
+            l.tags.push(tag); 
+            l.updatedAt = new Date().toISOString(); 
+            await dbOp('links', 'readwrite', l); 
+        }
+    }
+    closeModal('genericModal');
+    clearBulk();
+}
+
+async function openBulkCollectionModal() {
+    const cols = await dbOp('collections', 'readonly');
+
+    let html = `<h2>Add to Collection</h2>`;
+    if (cols.length === 0) {
+        html += `<div style="text-align:center; padding:20px 0;">
+            <p class="text-sm">No collections defined yet.</p>
+            <p class="text-sm">Create a collection from the Collections tab first.</p>
+        </div>`;
+    } else {
+        html += `<select id="bulkColSelect" class="input">
+            <option value="" disabled selected>Select a collection...</option>
+            ${cols.map(c => `<option value="${c.id}">${c.icon || '📁'} ${c.name}</option>`).join('')}
+        </select>`;
+    }
+    
+    html += `<div class="flex-between mt-2">
+        <button class="btn btn-outline" onclick="closeModal('genericModal')" style="width:auto;padding:10px 20px;">Cancel</button>
+        <button class="btn" onclick="applyBulkCollection()" ${cols.length === 0 ? 'disabled' : ''}>Add to Collection</button>
+    </div>`;
+
+    document.getElementById('genericModalContent').innerHTML = html;
+    openModal('genericModal');
+}
+
+async function applyBulkCollection() {
+    const colId = document.getElementById('bulkColSelect').value;
+    if (!colId) return;
+    const links = await dbOp('links', 'readonly');
+    for(const id of bulkSelected) {
+        let l = links.find(x=>x.id===id);
+        if(l && !l.collections.includes(colId)) { 
+            l.collections.push(colId); 
+            l.updatedAt = new Date().toISOString(); 
+            await dbOp('links', 'readwrite', l); 
+        }
+    }
+    closeModal('genericModal');
+    clearBulk();
+}
+
+function filterLinks(q) { const cards = document.querySelectorAll('#linksList .card'); q = q.toLowerCase(); cards.forEach(c => { c.style.display = c.innerText.toLowerCase().includes(q) ? 'block' : 'none'; }); }
+
+async function openAddModal() { document.getElementById('modalTitle').innerText = 'Add Link'; document.getElementById('linkId').value = ''; document.getElementById('linkUrl').value = ''; document.getElementById('linkTitle').value = ''; document.getElementById('linkDesc').value = ''; document.getElementById('linkTags').value = ''; document.getElementById('linkCategory').value = 'Articles'; document.getElementById('linkFav').checked = false; document.getElementById('linkReadLater').checked = false; document.getElementById('duplicateWarning').style.display = 'none'; document.getElementById('ruleAppliedFeedback').style.display = 'none'; document.getElementById('deleteLinkBtn').style.display = 'none'; const cols = await dbOp('collections', 'readonly'); document.getElementById('collectionsCheckboxes').innerHTML = cols.length ? `<div class="text-sm mb-1"><strong>Collections:</strong></div>` + cols.map(c => `<label class="text-sm" style="display:block;margin-left:10px;"><input type="checkbox" class="col-check" value="${c.id}"> ${c.name}</label>`).join('') : ''; openModal('linkModal'); }
+async function openEditModal(id) { const l = await dbOp('links', 'readonly', null, id); if(!l) return; openAddModal(); document.getElementById('modalTitle').innerText = 'Edit Link'; document.getElementById('linkId').value = l.id; document.getElementById('linkUrl').value = l.url; document.getElementById('linkTitle').value = l.title; document.getElementById('linkDesc').value = l.description; document.getElementById('linkTags').value = l.tags.join(', '); document.getElementById('linkCategory').value = l.category; document.getElementById('linkFav').checked = l.isFavorite; document.getElementById('linkReadLater').checked = l.isReadLater; document.getElementById('deleteLinkBtn').style.display = 'block'; document.querySelectorAll('.col-check').forEach(cb => { cb.checked = l.collections && l.collections.includes(cb.value); }); }
+async function deleteCurrentLink() { const id = document.getElementById('linkId').value; if (!id) return; if (confirm("Are you sure you want to delete this link?")) { await dbOp('links', 'readwrite', null, id); closeModal('linkModal'); if(currentRoute === 'home') render(); } }
+async function saveLink() { const id = document.getElementById('linkId').value || uid(); const url = document.getElementById('linkUrl').value; const title = document.getElementById('linkTitle').value || getDomain(url); const isUpdate = !!document.getElementById('linkId').value; if(!url) return alert("URL is required"); const dupWarn = document.getElementById('duplicateWarning'); if (!isUpdate) { const dup = await checkDuplicate(url, title, id); if (dup) { dupWarn.innerHTML = `⚠️ Duplicate found: <strong>${dup.title}</strong> (${getDomain(dup.url)}).<br>Click <strong>Save Link</strong> again to force save.`; dupWarn.style.display = 'block'; return; } } const collections = Array.from(document.querySelectorAll('.col-check:checked')).map(cb => cb.value); let link = { id, url, title, description: document.getElementById('linkDesc').value, tags: document.getElementById('linkTags').value.split(',').map(t=>t.trim()).filter(Boolean), category: document.getElementById('linkCategory').value, collections, isFavorite: document.getElementById('linkFav').checked, isReadLater: document.getElementById('linkReadLater').checked, isRead: false, createdAt: isUpdate ? (await dbOp('links', 'readonly', null, id)).createdAt : new Date().toISOString(), updatedAt: new Date().toISOString(), linkHealth: { status: 'unchecked', lastChecked: null, statusCode: null }, duplicateOf: null, mergedFrom: [], metadata: { domain: getDomain(url), ogImage: null, estimatedReadTime: null, author: null } }; const applied = await applyRules(link); const ruleFeed = document.getElementById('ruleAppliedFeedback'); if(applied.length > 0) { ruleFeed.innerHTML = `🤖 Auto-applied: ${applied.join(', ')}`; ruleFeed.style.display = 'block'; } await dbOp('links', 'readwrite', link); closeModal('linkModal'); if(currentRoute === 'home') render(); }
+
+const PREDEFINED_ICONS = ['📁', '📚', '💡', '🛠️', '🎨', '🎬', '🎮', '📱', '💻', '🌐', '🔒', '💰', '🛒', '🎵', '📸', '✈️', '🏠', '❤️', '⭐', '🚀', '📊', '📝', '🎓', '💼', '🏋️', '🍳', '🐾', '🌍'];
+
+async function renderCollections() { const cols = await dbOp('collections', 'readonly'); const links = await dbOp('links', 'readonly'); return `<div class="flex-between mb-1"><h2>Collections</h2><button class="btn" style="width:auto; padding:8px 16px;" onclick="openCollectionModal()">+ New</button></div>${cols.length === 0 ? '<p class="text-sm" style="text-align:center;margin-top:40px;">No collections yet.</p>' : cols.map(c => { const count = links.filter(l => l.collections && l.collections.includes(c.id)).length; return `<div class="card" onclick="viewCollection('${c.id}')"><div class="flex-between"><strong>${c.icon || '📁'} ${c.name}</strong><span class="text-sm">${count} links</span></div><div class="text-sm mt-1">${c.description || 'No description'}</div></div><div style="display:flex; gap:8px; margin-top:-8px; margin-bottom:12px; padding-left:10px;"><button class="text-sm text-danger" style="background:none;border:none;cursor:pointer;" onclick="event.stopPropagation(); deleteCollection('${c.id}')">Delete Collection</button></div>`; }).join('')}`; }
+
+async function openCollectionModal(id = null) {
+    const col = id ? await dbOp('collections', 'readonly', null, id) : null;
+    const currentIcon = col ? col.icon : '📁';
+    const iconGridHtml = PREDEFINED_ICONS.map(icon => `<button type="button" class="icon-btn ${icon === currentIcon ? 'active' : ''}" onclick="selectIcon('${icon}')">${icon}</button>`).join('');
+    document.getElementById('genericModalContent').innerHTML = `<h2>${col ? 'Edit' : 'New'} Collection</h2><input type="hidden" id="colId" value="${col ? col.id : uid()}"><div class="text-sm mb-1"><strong>Choose Icon</strong></div><div id="iconGridContainer" class="icon-grid">${iconGridHtml}</div><input type="hidden" id="colIcon" value="${currentIcon}"><input type="text" id="colName" class="input" placeholder="Collection Name" value="${col ? col.name : ''}"><textarea id="colDesc" class="input" placeholder="Description">${col ? col.description : ''}</textarea><div style="display:flex; gap:10px; width:100%; justify-content:flex-end;"><button class="btn btn-outline" onclick="closeModal('genericModal')" style="width:auto;padding:10px 20px;">Cancel</button><button class="btn" onclick="saveCollection()">Save</button></div>`;
+    openModal('genericModal');
+}
+
+function selectIcon(icon) {
+    document.getElementById('colIcon').value = icon;
+    const container = document.getElementById('iconGridContainer');
+    container.innerHTML = PREDEFINED_ICONS.map(i => `<button type="button" class="icon-btn ${i === icon ? 'active' : ''}" onclick="selectIcon('${i}')">${i}</button>`).join('');
+}
+
+async function saveCollection() { const id = document.getElementById('colId').value; const old = await dbOp('collections', 'readonly', null, id); const col = { id, icon: document.getElementById('colIcon').value, name: document.getElementById('colName').value, description: document.getElementById('colDesc').value, createdAt: old ? old.createdAt : new Date().toISOString(), updatedAt: new Date().toISOString() }; if(!col.name) return alert("Name required"); await dbOp('collections', 'readwrite', col); closeModal('genericModal'); render(); }
+async function deleteCollection(id) { if(!confirm("Delete collection? Links inside will NOT be deleted.")) return; await dbOp('collections', 'readwrite', null, id); render(); }
+async function viewCollection(id) { const col = await dbOp('collections', 'readonly', null, id); const links = (await dbOp('links', 'readonly')).filter(l => l.collections && l.collections.includes(id)); document.getElementById('genericModalContent').innerHTML = `<h2>${col.icon} ${col.name}</h2><p class="text-sm mb-1">${col.description}</p><hr style="border:0;border-top:1px solid var(--border);margin:16px 0;">${links.length === 0 ? '<p class="text-sm">Empty collection.</p>' : links.map(l => `<div class="card" style="cursor:default;"><strong>${l.title}</strong><div class="text-sm">${getDomain(l.url)}</div></div>`).join('')}<button class="btn btn-outline mt-2" onclick="closeModal('genericModal'); render();">Close</button>`; openModal('genericModal'); }
+
+async function renderRules() { const rules = await dbOp('rules', 'readonly'); return `<div class="flex-between mb-1"><h2>Auto-Tagging Rules</h2><button class="btn" style="width:auto; padding:8px 16px;" onclick="openRuleModal()">+ New Rule</button></div><p class="text-sm mb-1">Rules automatically apply tags/categories when you save a link.</p>${rules.length === 0 ? '<p class="text-sm" style="text-align:center;margin-top:40px;">No rules configured.</p>' : rules.map(r => `<div class="card" style="cursor:default;"><div class="flex-between"><strong>${r.name}</strong><label style="cursor:pointer;"><input type="checkbox" ${r.isEnabled ? 'checked' : ''} onchange="toggleRule('${r.id}', this.checked)"></label></div><div class="text-sm mt-1"><strong>If:</strong> ${r.conditions.map(c => `[${c.field} ${c.operator} "${c.value}"]`).join(` <span style="color:var(--primary)">${c.logic}</span> `)}<br><strong>Then:</strong> ${r.actions.map(a => `${a.type}(${a.value})`).join(', ')}</div><div class="text-sm mt-1">Matches: ${r.matchCount || 0}</div><div style="margin-top:8px;"><button class="text-sm text-danger" style="background:none;border:none;cursor:pointer;" onclick="deleteRule('${r.id}')">Delete</button></div></div>`).join('')}`; }
+async function openRuleModal() { document.getElementById('genericModalContent').innerHTML = `<h2>New Auto-Tagging Rule</h2><input type="text" id="ruleName" class="input" placeholder="Rule Name (e.g. Github Sniffer)"><div class="text-sm mb-1"><strong>Conditions (If...)</strong></div><div id="conditionsContainer"><div class="rule-block" style="display:flex;gap:8px;align-items:center;"><select class="input cond-field" style="margin:0;width:30%"><option value="domain">Domain</option><option value="url">URL</option><option value="title">Title</option></select><select class="input cond-op" style="margin:0;width:30%"><option value="contains">contains</option><option value="equals">equals</option><option value="startsWith">starts with</option></select><input type="text" class="input cond-val" placeholder="Value" style="margin:0;width:auto;flex:1"></div></div><button class="btn btn-outline mt-1" style="width:auto;padding:6px 12px;font-size:0.8rem;" onclick="addCondition()">+ OR Condition</button><div class="text-sm mb-1 mt-2"><strong>Actions (Then...)</strong></div><div id="actionsContainer"><div class="rule-block" style="display:flex;gap:8px;align-items:center;"><select class="input act-type" style="margin:0;width:40%" onchange="updateActionInput(this)"><option value="addTag">Add Tag</option><option value="setCategory">Set Category</option><option value="setFavorite">Set Favorite</option></select><input type="text" class="input act-val" placeholder="Value" style="margin:0;width:auto;flex:1"></div></div><button class="btn btn-outline mt-1" style="width:auto;padding:6px 12px;font-size:0.8rem;" onclick="addAction()">+ Action</button><label class="text-sm mt-2" style="display:block;"><input type="checkbox" id="ruleStopMatch" checked> Stop evaluating other rules after this matches</label><div class="flex-between mt-2"><div style="display:flex; gap:10px; width:100%; justify-content:flex-end;"><button class="btn btn-outline" onclick="closeModal('genericModal'); render();" style="width:auto;padding:10px 20px;">Cancel</button><button class="btn" onclick="saveRule()">Save Rule</button></div></div>`; openModal('genericModal'); }
+function addCondition() { document.getElementById('conditionsContainer').insertAdjacentHTML('beforeend', `<div class="rule-block mt-1" style="display:flex;gap:8px;align-items:center;"><span style="color:var(--primary);font-weight:bold;">OR</span><select class="input cond-field" style="margin:0;width:30%"><option value="domain">Domain</option><option value="url">URL</option><option value="title">Title</option></select><select class="input cond-op" style="margin:0;width:30%"><option value="contains">contains</option><option value="equals">equals</option></select><input type="text" class="input cond-val" placeholder="Value" style="margin:0;width:auto;flex:1"></div>`); }
+function addAction() { document.getElementById('actionsContainer').insertAdjacentHTML('beforeend', `<div class="rule-block mt-1" style="display:flex;gap:8px;align-items:center;"><select class="input act-type" style="margin:0;width:40%" onchange="updateActionInput(this)"><option value="addTag">Add Tag</option><option value="setCategory">Set Category</option><option value="setFavorite">Set Favorite</option></select><input type="text" class="input act-val" placeholder="Value" style="margin:0;width:auto;flex:1"></div>`); }
+function updateActionInput(el) { el.nextElementSibling.style.display = el.value === 'setFavorite' ? 'none' : 'block'; }
+async function saveRule() { const conditions = Array.from(document.querySelectorAll('#conditionsContainer .rule-block')).map(block => ({ field: block.querySelector('.cond-field').value, operator: block.querySelector('.cond-op').value, value: block.querySelector('.cond-val').value, logic: 'AND' })); conditions.forEach((c, i) => { if(i>0) c.logic = 'OR'; else c.logic = 'AND'; }); const actions = Array.from(document.querySelectorAll('#actionsContainer .rule-block')).map(block => ({ type: block.querySelector('.act-type').value, value: block.querySelector('.act-val').value })); const rule = { id: uid(), name: document.getElementById('ruleName').value, isEnabled: true, conditions, actions, stopOnMatch: document.getElementById('ruleStopMatch').checked, createdAt: new Date().toISOString(), matchCount: 0, lastMatchedAt: null }; if(!rule.name) return alert("Name required"); await dbOp('rules', 'readwrite', rule); closeModal('genericModal'); render(); }
+async function toggleRule(id, val) { const r = await dbOp('rules', 'readonly', null, id); r.isEnabled = val; await dbOp('rules', 'readwrite', r); }
+async function deleteRule(id) { if(!confirm("Delete rule?")) return; await dbOp('rules', 'readwrite', null, id); render(); }
+
+async function renderStats() { const links = await dbOp('links', 'readonly'); const cols = await dbOp('collections', 'readonly'); const rules = await dbOp('rules', 'readonly'); const totalLinks = links.length; const domains = {}; const categories = {}; let broken = 0, dustyShelf = 0; const now = Date.now(); links.forEach(l => { const d = l.metadata?.domain || 'unknown'; domains[d] = (domains[d] || 0) + 1; categories[l.category] = (categories[l.category] || 0) + 1; if(l.linkHealth?.status === 'broken') broken++; if(!l.isRead && (now - new Date(l.createdAt).getTime()) > 90 * 24 * 60 * 60 * 1000) dustyShelf++; }); const topDomains = Object.entries(domains).sort((a,b) => b[1]-a[1]).slice(0, 5); const topCats = Object.entries(categories).sort((a,b) => b[1]-a[1]); return `<h2 class="mb-1">Statistics & Insights</h2><div class="grid-2 mb-1"><div class="stat-card"><div class="stat-num">${totalLinks}</div><div class="text-sm">Total Links</div></div><div class="stat-card"><div class="stat-num">${cols.length}</div><div class="text-sm">Collections</div></div><div class="stat-card"><div class="stat-num" style="color:var(--danger)">${broken}</div><div class="text-sm">Broken Links</div></div><div class="stat-card"><div class="stat-num" style="color:var(--warning)">${dustyShelf}</div><div class="text-sm">Dusty Shelf (>90d)</div></div></div><div class="card" style="cursor:default;"><strong>📊 Top Domains</strong><div style="margin-top:12px;">${topDomains.map(d => `<div style="display:flex;align-items:center;margin-bottom:8px;"><span class="text-sm" style="width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d[0]}</span><div style="flex:1;background:var(--bg);height:8px;border-radius:4px;margin:0 12px;"><div style="background:var(--primary);height:100%;width:${totalLinks > 0 ? (d[1]/totalLinks)*100 : 0}%;border-radius:4px;"></div></div><span class="text-sm" style="width:20px;text-align:right;">${d[1]}</span></div>`).join('')}</div></div><div class="card" style="cursor:default;"><strong>📂 Categories</strong><div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px;">${topCats.map(c => `<span class="badge" style="font-size:1rem;padding:6px 12px;">${c[0]} (${c[1]})</span>`).join('')}</div></div><div class="card" style="cursor:default;"><strong>🤖 Rule Effectiveness</strong><div class="mt-1">${rules.length === 0 ? '<p class="text-sm">No rules active.</p>' : rules.sort((a,b) => (b.matchCount||0) - (a.matchCount||0)).map(r => `<div class="flex-between text-sm" style="margin-bottom:6px;"><span>${r.name} ${r.isEnabled ? '✅' : '❌'}</span><strong>${r.matchCount || 0} matches</strong></div>`).join('')}</div></div>`; }
+
+function renderSettings() { return `<h2 class="mb-1">Settings</h2><div class="card" style="cursor:default;"><strong>☁️ Google Drive Sync</strong><p class="text-sm mt-1">Direct OAuth is restricted on local files (file://) due to CORS security.</p><p class="text-sm mt-1"><strong>Workaround:</strong> Use Export/Import to manually move your <code>linkvault_data.json</code> to Google Drive.</p></div><div class="card" style="cursor:default;"><strong>💾 Local Data Management</strong><div class="mt-2" style="display:flex;flex-direction:column;gap:12px;"><button class="btn btn-outline" onclick="exportData()">📥 Export Full JSON Backup</button><label class="btn btn-outline" style="display:block;text-align:center;cursor:pointer;">📤 Import JSON Backup<input type="file" accept=".json" style="display:none;" onchange="importData(event)"></label><button class="btn btn-danger" onclick="if(confirm('DELETE ALL DATA? This cannot be undone.')) { indexedDB.deleteDatabase('LinkVaultDB'); location.reload(); }">⚠️ Erase All Local Data</button></div></div><div class="card" style="cursor:default;"><strong>🔍 Link Health Checker</strong><p class="text-sm mt-1">Note: Pinging external links fails locally due to CORS. Works when hosted on a web server.</p><button class="btn btn-outline mt-2" onclick="simulateHealthCheck()">Run Simulated Health Check</button></div><div class="card" style="cursor:default;"><strong>ℹ️ About</strong><p class="text-sm mt-1">LinkVault v1.0 - Offline-First Bookmark Manager.</p><p class="text-sm">Data is stored securely in your browser's IndexedDB.</p></div>`; }
+
+async function exportData() { const data = { appVersion: "1.0", exportedAt: new Date().toISOString(), links: await dbOp('links', 'readonly'), collections: await dbOp('collections', 'readonly'), rules: await dbOp('rules', 'readonly') }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `linkvault_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); }
+async function importData(e) { const file = e.target.files[0]; if (!file) return; const text = await file.text(); try { const data = JSON.parse(text); if (data.links) for (const l of data.links) await dbOp('links', 'readwrite', l); if (data.collections) for (const c of data.collections) await dbOp('collections', 'readwrite', c); if (data.rules) for (const r of data.rules) await dbOp('rules', 'readwrite', r); alert("Import successful!"); render(); } catch (err) { alert("Invalid JSON file."); } }
+async function simulateHealthCheck() { const links = await dbOp('links', 'readonly'); for(const l of links) { const rand = Math.random(); l.linkHealth = { status: rand > 0.8 ? 'broken' : rand > 0.6 ? 'warning' : 'healthy', lastChecked: new Date().toISOString(), statusCode: rand > 0.8 ? 404 : 200 }; await dbOp('links', 'readwrite', l); } alert(`Simulated check finished on ${links.length} links.`); if(currentRoute === 'home' || currentRoute === 'stats') render(); }
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+document.querySelectorAll('.modal-overlay').forEach(el => { el.addEventListener('click', (e) => { if (e.target === el) closeModal(el.id); }); });
+
+window.onload = async () => {
+    if(localStorage.getItem('theme')) document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'));
+    await initDB();
+    navigate('home');
+};
+</script>
+</body>
+</html>
