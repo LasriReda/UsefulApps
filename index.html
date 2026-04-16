@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UsefulApps — Single Page App Collection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    :root {
+      --bg: #060608;
+      --bg-elevated: #0e0e12;
+      --card: rgba(18, 18, 24, 0.7);
+      --card-hover: rgba(24, 24, 32, 0.85);
+      --border: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(16, 185, 129, 0.3);
+      --fg: #e8e8ed;
+      --fg-muted: #7a7a8a;
+      --fg-dim: #4a4a58;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --accent-soft: rgba(16, 185, 129, 0.08);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+      --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ===== Animated Background ===== */
+    .bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .bg-canvas::before {
+      content: '';
+      position: absolute;
+      width: 650px;
+      height: 650px;
+      top: -150px;
+      right: -120px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.07) 0%, transparent 70%);
+      animation: drift1 22s ease-in-out infinite;
+    }
+
+    .bg-canvas::after {
+      content: '';
+      position: absolute;
+      width: 550px;
+      height: 550px;
+      bottom: -100px;
+      left: -80px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.05) 0%, transparent 70%);
+      animation: drift2 28s ease-in-out infinite;
+    }
+
+    @keyframes drift1 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(-90px, 70px) scale(1.1); }
+      66% { transform: translate(50px, -50px) scale(0.95); }
+    }
+
+    @keyframes drift2 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(70px, -90px) scale(1.15); }
+    }
+
+    .grid-pattern {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 100%);
+    }
+
+    .particle {
+      position: fixed;
+      width: 2px;
+      height: 2px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===== Layout ===== */
+    .app-root {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== Header ===== */
+    app-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(24px) saturate(1.5);
+      -webkit-backdrop-filter: blur(24px) saturate(1.5);
+      background: rgba(6, 6, 8, 0.72);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-xs);
+      background: linear-gradient(135deg, var(--accent), #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      color: #fff;
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.25);
+    }
+
+    .header-stats {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+    }
+
+    .stat-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(16, 185, 129, 0.12);
+      border-radius: 20px;
+      color: var(--accent);
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      transition: var(--transition);
+    }
+
+    .btn-icon:hover {
+      background: var(--accent-soft);
+      border-color: var(--border-hover);
+      color: var(--accent);
+    }
+
+    .github-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 16px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg-muted);
+      font-size: 0.8rem;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .github-link:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.12);
+      color: var(--fg);
+    }
+
+    /* ===== Hero ===== */
+    app-hero {
+      padding: 100px 32px 48px;
+      max-width: 1280px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .hero-content {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 18px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-size: 0.78rem;
+      color: var(--fg-muted);
+      margin-bottom: 32px;
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(2.8rem, 6vw, 4rem);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1.08;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-desc {
+      font-size: 1.15rem;
+      color: var(--fg-muted);
+      line-height: 1.7;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    .hero-cta-row {
+      margin-top: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: linear-gradient(135deg, var(--accent), #059669);
+      color: #fff;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg-muted);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.12);
+      color: var(--fg);
+    }
+
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      font-size: 0.7rem;
+      font-family: var(--font-body);
+      color: var(--fg-dim);
+      line-height: 1.4;
+    }
+
+    /* ===== Section divider ===== */
+    .section-divider {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+
+    .section-label {
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--fg-dim);
+      white-space: nowrap;
+    }
+
+    /* ===== Toolbar ===== */
+    app-toolbar {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 36px 32px 32px;
+      width: 100%;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 240px;
+      position: relative;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--fg-dim);
+      font-size: 0.85rem;
+      pointer-events: none;
+      transition: var(--transition);
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 12px 16px 12px 42px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      outline: none;
+      backdrop-filter: blur(10px);
+      transition: var(--transition);
+    }
+
+    .search-box input::placeholder { color: var(--fg-dim); }
+
+    .search-box input:focus {
+      border-color: var(--border-hover);
+      background: var(--card-hover);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .search-box input:focus ~ i { color: var(--accent); }
+
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      padding: 9px 18px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg-muted);
+      font-family: var(--font-body);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+
+    .pill:hover {
+      background: rgba(255,255,255,0.03);
+      border-color: rgba(255,255,255,0.1);
+      color: var(--fg);
+    }
+
+    .pill.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .view-toggle {
+      display: flex;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .view-btn {
+      padding: 9px 13px;
+      border: none;
+      background: transparent;
+      color: var(--fg-dim);
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: var(--transition);
+    }
+
+    .view-btn.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .view-btn:hover:not(.active) { color: var(--fg-muted); }
+
+    /* ===== App Grid ===== */
+    app-grid {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 32px 100px;
+      width: 100%;
+      flex: 1;
+    }
+
+    .grid-view {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 24px;
+    }
+
+    .grid-view.list-mode {
+      grid-template-columns: 1fr;
+      max-width: 860px;
+    }
+
+    /* ===== App Card ===== */
+    .app-card {
+      position: relative;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      backdrop-filter: blur(14px);
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      opacity: 0;
+      transform: translateY(28px);
+      animation: cardIn 0.6s ease forwards;
+    }
+
+    .app-card:nth-child(1) { animation-delay: 0.1s; }
+    .app-card:nth-child(2) { animation-delay: 0.2s; }
+    .app-card:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes cardIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .app-card:hover {
+      border-color: var(--border-hover);
+      background: var(--card-hover);
+      transform: translateY(-6px);
+      box-shadow:
+        0 24px 48px rgba(0,0,0,0.35),
+        0 0 0 1px var(--border-hover),
+        inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .app-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 10%, var(--card-accent, var(--accent)) 50%, transparent 90%);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+
+    .app-card:hover::before { opacity: 0.7; }
+
+    .card-glow {
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), var(--card-glow-color, var(--accent-glow)), transparent 55%);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+
+    .app-card:hover .card-glow { opacity: 1; }
+
+    .card-inner {
+      position: relative;
+      z-index: 1;
+      padding: 32px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .card-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .app-card:hover .card-icon { transform: scale(1.08) rotate(-2deg); }
+
+    .card-icon.green { background: rgba(16, 185, 129, 0.1); color: #34d399; }
+    .card-icon.blue { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+    .card-icon.amber { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+    .card-icon.rose { background: rgba(244, 63, 94, 0.1); color: #fb7185; }
+    .card-icon.violet { background: rgba(139, 92, 246, 0.1); color: #a78bfa; }
+    .card-icon.cyan { background: rgba(6, 182, 212, 0.1); color: #22d3ee; }
+    .card-icon.orange { background: rgba(249, 115, 22, 0.1); color: #fb923c; }
+    .card-icon.lime { background: rgba(132, 204, 22, 0.1); color: #a3e635; }
+
+    .card-meta { flex: 1; min-width: 0; }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
+      transition: var(--transition);
+    }
+
+    .app-card:hover .card-title { color: var(--card-accent, var(--accent)); }
+
+    .card-subtitle {
+      font-size: 0.78rem;
+      color: var(--fg-dim);
+    }
+
+    .card-desc {
+      font-size: 0.9rem;
+      color: var(--fg-muted);
+      line-height: 1.7;
+      margin-bottom: 24px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .tag {
+      padding: 4px 12px;
+      border-radius: 14px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      background: rgba(255,255,255,0.04);
+      color: var(--fg-dim);
+      border: 1px solid rgba(255,255,255,0.04);
+      transition: var(--transition);
+    }
+
+    .app-card:hover .tag {
+      background: rgba(255,255,255,0.06);
+      color: var(--fg-muted);
+    }
+
+    .card-arrow {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.03);
+      color: var(--fg-dim);
+      font-size: 0.8rem;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-shrink: 0;
+    }
+
+    .app-card:hover .card-arrow {
+      background: var(--card-accent, var(--accent));
+      color: #fff;
+      transform: translateX(3px);
+      box-shadow: 0 0 20px var(--card-glow-color, rgba(16, 185, 129, 0.3));
+    }
+
+    /* Card color variants */
+    .app-card[data-color="blue"] {
+      --card-accent: #60a5fa;
+      --card-glow-color: rgba(59, 130, 246, 0.12);
+    }
+    .app-card[data-color="amber"] {
+      --card-accent: #fbbf24;
+      --card-glow-color: rgba(245, 158, 11, 0.12);
+    }
+    .app-card[data-color="rose"] {
+      --card-accent: #fb7185;
+      --card-glow-color: rgba(244, 63, 94, 0.12);
+    }
+    .app-card[data-color="violet"] {
+      --card-accent: #a78bfa;
+      --card-glow-color: rgba(139, 92, 246, 0.12);
+    }
+    .app-card[data-color="cyan"] {
+      --card-accent: #22d3ee;
+      --card-glow-color: rgba(6, 182, 212, 0.12);
+    }
+    .app-card[data-color="orange"] {
+      --card-accent: #fb923c;
+      --card-glow-color: rgba(249, 115, 22, 0.12);
+    }
+
+    /* List mode */
+    .list-mode .card-inner {
+      padding: 22px 32px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .list-mode .card-header { margin-bottom: 0; flex-shrink: 0; }
+    .list-mode .card-desc { margin-bottom: 0; flex: 1; -webkit-line-clamp: 1; }
+    .list-mode .card-footer { flex-shrink: 0; }
+
+    /* ===== Empty State ===== */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--fg-dim);
+      grid-column: 1 / -1;
+    }
+
+    .empty-state i { font-size: 3rem; margin-bottom: 20px; opacity: 0.3; }
+
+    .empty-state h3 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      color: var(--fg-muted);
+      margin-bottom: 8px;
+    }
+
+    .empty-state p { font-size: 0.9rem; }
+
+    /* ===== Contribute CTA ===== */
+    .contribute-section {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 32px 80px;
+      width: 100%;
+    }
+
+    .contribute-card {
+      border-radius: var(--radius);
+      border: 1px dashed rgba(255,255,255,0.08);
+      background: var(--card);
+      backdrop-filter: blur(12px);
+      padding: 48px 40px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .contribute-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, var(--accent-soft), transparent 60%);
+      pointer-events: none;
+    }
+
+    .contribute-card h3 {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      position: relative;
+    }
+
+    .contribute-card p {
+      color: var(--fg-muted);
+      font-size: 0.92rem;
+      max-width: 460px;
+      margin: 0 auto 24px;
+      position: relative;
+    }
+
+    .contribute-card .btn-primary { position: relative; }
+
+    /* ===== Footer ===== */
+    app-footer {
+      border-top: 1px solid var(--border);
+      padding: 32px;
+    }
+
+    .footer-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--fg-dim);
+    }
+
+    .footer-left .author {
+      color: var(--fg-muted);
+      font-weight: 500;
+    }
+
+    .footer-links { display: flex; gap: 24px; }
+
+    .footer-links a {
+      font-size: 0.8rem;
+      color: var(--fg-dim);
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+
+    /* ===== Toast ===== */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      padding: 14px 22px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-size: 0.85rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      animation: toastIn 0.35s ease, toastOut 0.35s ease 2.5s forwards;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      backdrop-filter: blur(16px);
+    }
+
+    @keyframes toastIn { from { opacity: 0; transform: translateY(20px) scale(0.96); } }
+    @keyframes toastOut { to { opacity: 0; transform: translateY(-10px) scale(0.96); } }
+
+    /* ===== Scrollbar ===== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      .header-stats { display: none; }
+      .header-inner { padding: 0 20px; }
+      app-hero { padding: 60px 20px 32px; }
+      app-toolbar { padding: 28px 20px 24px; }
+      app-grid { padding: 0 20px 60px; }
+      .grid-view { grid-template-columns: 1fr; }
+      .filter-pills { display: none; }
+      .hero-cta-row { flex-direction: column; }
+      .hero-cta-row .kbd-hint { display: none; }
+      .footer-inner { flex-direction: column; text-align: center; }
+      .list-mode .card-inner { flex-direction: column; align-items: flex-start; }
+      .contribute-card { padding: 32px 24px; }
+      .contribute-section { padding: 0 20px 60px; }
+      .section-divider { padding: 0 20px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+      .particle { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-canvas"></div>
+  <div class="grid-pattern"></div>
+
+  <div class="app-root" id="appRoot">
+
+    <!-- Header -->
+    <app-header>
+      <div class="header-inner">
+        <a href="./" class="logo">
+          <div class="logo-mark"><i class="fas fa-cube"></i></div>
+          <span>UsefulApps</span>
+        </a>
+        <div class="header-stats">
+          <div class="stat-badge">
+            <i class="fas fa-layer-group"></i>
+            <span id="appCount">0 apps</span>
+          </div>
+          <div class="stat-badge">
+            <i class="fas fa-tag"></i>
+            <span id="catCount">0 categories</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="https://github.com/LasriReda/UsefulApps" class="github-link" target="_blank" rel="noopener" aria-label="View repository on GitHub">
+            <i class="fab fa-github"></i>
+            <span>Repository</span>
+          </a>
+        </div>
+      </div>
+    </app-header>
+
+    <!-- Hero -->
+    <app-hero>
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="dot"></span>
+          <span>Hosted on GitHub Pages</span>
+        </div>
+        <h1 class="hero-title">UsefulApps Collection</h1>
+        <p class="hero-desc">
+          A growing set of self-contained single-page web applications.
+          No build steps, no frameworks — just open and run.
+        </p>
+        <div class="hero-cta-row">
+          <a href="#apps" class="btn-primary">
+            <i class="fas fa-rocket"></i>
+            Browse Apps
+          </a>
+          <a href="https://github.com/LasriReda/UsefulApps" target="_blank" rel="noopener" class="btn-secondary">
+            <i class="fab fa-github"></i>
+            View Source
+          </a>
+          <span class="kbd-hint" style="display:flex;align-items:center;gap:6px;color:var(--fg-dim);font-size:0.78rem;">
+            <span class="kbd">Ctrl</span>+<span class="kbd">K</span> to search
+          </span>
+        </div>
+      </div>
+    </app-hero>
+
+    <!-- Section divider -->
+    <div class="section-divider">
+      <span class="section-label">Applications</span>
+    </div>
+
+    <!-- Toolbar -->
+    <app-toolbar id="apps">
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search apps..." aria-label="Search apps" />
+          <i class="fas fa-search"></i>
+        </div>
+        <div class="filter-pills" id="filterPills"></div>
+        <div class="view-toggle">
+          <button class="view-btn active" data-view="grid" title="Grid view" aria-label="Grid view">
+            <i class="fas fa-th-large"></i>
+          </button>
+          <button class="view-btn" data-view="list" title="List view" aria-label="List view">
+            <i class="fas fa-list"></i>
+          </button>
+        </div>
+      </div>
+    </app-toolbar>
+
+    <!-- Grid -->
+    <app-grid>
+      <div class="grid-view" id="appGrid"></div>
+    </app-grid>
+
+    <!-- Contribute CTA -->
+    <section class="contribute-section">
+      <div class="contribute-card">
+        <h3>Have an idea for a new app?</h3>
+        <p>
+          This collection is open to contributions. Fork the repo, add your single-page app,
+          and open a pull request to get it listed here.
+        </p>
+        <a href="https://github.com/LasriReda/UsefulApps/fork" target="_blank" rel="noopener" class="btn-primary">
+          <i class="fas fa-code-branch"></i>
+          Fork & Contribute
+        </a>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <app-footer>
+      <div class="footer-inner">
+        <div class="footer-left">
+          <span>Maintained by</span>
+          <a href="https://github.com/LasriReda" target="_blank" rel="noopener" class="author">LasriReda</a>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/LasriReda/UsefulApps" target="_blank" rel="noopener">
+            <i class="fab fa-github"></i> Source
+          </a>
+          <a href="https://github.com/LasriReda/UsefulApps/issues" target="_blank" rel="noopener">
+            <i class="fas fa-circle-dot"></i> Issues
+          </a>
+          <a href="https://pages.github.com" target="_blank" rel="noopener">
+            <i class="fab fa-github"></i> Pages
+          </a>
+        </div>
+      </div>
+    </app-footer>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    // ============================================================
+    // APP REGISTRY
+    // Add new entries here as you create more single-page apps.
+    // Each href is relative to this index.html in the repo root.
+    // ============================================================
+    const APPS = [
+      {
+        name: 'Link Vault',
+        href: './LinkVault.html',
+        desc: 'Save, organize, and access your bookmarks in one place. A personal link library with fast search and clean management.',
+        icon: 'fas fa-link',
+        color: 'cyan',
+        tags: ['Bookmarks', 'Organization'],
+        category: 'Productivity'
+      },
+      {
+        name: 'Wish Keeper',
+        href: './WishKeeper.html',
+        desc: 'Keep track of your wishes and goals in a beautifully simple interface. Add, prioritize, and check off items as they come true.',
+        icon: 'fas fa-star',
+        color: 'amber',
+        tags: ['Goals', 'Personal'],
+        category: 'Lifestyle'
+      }
+    ];
+
+    // ============================================================
+    // State
+    // ============================================================
+    let state = {
+      filter: 'All',
+      search: '',
+      view: 'grid'
+    };
+
+    // ============================================================
+    // Derived data
+    // ============================================================
+    function getCategories() {
+      const cats = new Set(APPS.map(a => a.category));
+      return ['All', ...Array.from(cats).sort()];
+    }
+
+    function getFilteredApps() {
+      return APPS.filter(app => {
+        const matchCat = state.filter === 'All' || app.category === state.filter;
+        const q = state.search.toLowerCase();
+        const matchSearch = !q ||
+          app.name.toLowerCase().includes(q) ||
+          app.desc.toLowerCase().includes(q) ||
+          app.tags.some(t => t.toLowerCase().includes(q)) ||
+          app.category.toLowerCase().includes(q);
+        return matchCat && matchSearch;
+      });
+    }
+
+    // ============================================================
+    // Render: Filter pills
+    // ============================================================
+    function renderPills() {
+      const container = document.getElementById('filterPills');
+      const cats = getCategories();
+      container.innerHTML = cats.map(cat => `
+        <button class="pill ${state.filter === cat ? 'active' : ''}" data-cat="${cat}">
+          ${cat}
+        </button>
+      `).join('');
+
+      container.querySelectorAll('.pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.filter = btn.dataset.cat;
+          renderPills();
+          renderGrid();
+        });
+      });
+    }
+
+    // ============================================================
+    // Render: App cards
+    // ============================================================
+    function renderGrid() {
+      const grid = document.getElementById('appGrid');
+      const apps = getFilteredApps();
+
+      document.getElementById('appCount').textContent = `${APPS.length} app${APPS.length !== 1 ? 's' : ''}`;
+      document.getElementById('catCount').textContent = `${getCategories().length - 1} categor${getCategories().length - 1 !== 1 ? 'ies' : 'y'}`;
+
+      if (apps.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h3>No apps found</h3>
+            <p>Try adjusting your search or filter criteria.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = apps.map((app, i) => `
+        <a href="${app.href}" class="app-card" data-color="${app.color}" style="animation-delay: ${i * 0.12}s" aria-label="Open ${app.name}">
+          <div class="card-glow"></div>
+          <div class="card-inner">
+            <div class="card-header">
+              <div class="card-icon ${app.color}">
+                <i class="${app.icon}"></i>
+              </div>
+              <div class="card-meta">
+                <div class="card-title">${app.name}</div>
+                <div class="card-subtitle">${app.category}</div>
+              </div>
+            </div>
+            <div class="card-desc">${app.desc}</div>
+            <div class="card-footer">
+              <div class="card-tags">
+                ${app.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+              </div>
+              <div class="card-arrow">
+                <i class="fas fa-arrow-right"></i>
+              </div>
+            </div>
+          </div>
+        </a>
+      `).join('');
+
+      // Mouse glow tracking per card
+      grid.querySelectorAll('.app-card').forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+          const rect = card.getBoundingClientRect();
+          card.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width * 100) + '%');
+          card.style.setProperty('--my', ((e.clientY - rect.top) / rect.height * 100) + '%');
+        });
+      });
+    }
+
+    // ============================================================
+    // View toggle
+    // ============================================================
+    function initViewToggle() {
+      document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.view = btn.dataset.view;
+          document.getElementById('appGrid').classList.toggle('list-mode', state.view === 'list');
+        });
+      });
+    }
+
+    // ============================================================
+    // Search with debounce
+    // ============================================================
+    function initSearch() {
+      const input = document.getElementById('searchInput');
+      let timer;
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          state.search = input.value.trim();
+          renderGrid();
+        }, 200);
+      });
+    }
+
+    // ============================================================
+    // Floating particles
+    // ============================================================
+    function initParticles() {
+      for (let i = 0; i < 18; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = Math.random() * 2.5 + 0.5;
+        p.style.cssText = `
+          width: ${size}px; height: ${size}px;
+          left: ${Math.random() * 100}%;
+          top: ${Math.random() * 100}%;
+          animation: particleFloat ${Math.random() * 16 + 12}s ${Math.random() * 12}s ease-in-out infinite;
+        `;
+        document.body.appendChild(p);
+      }
+      const s = document.createElement('style');
+      s.textContent = `
+        @keyframes particleFloat {
+          0%, 100% { opacity: 0; transform: translateY(0) translateX(0); }
+          25% { opacity: 0.35; }
+          50% { opacity: 0.12; transform: translateY(-90px) translateX(35px); }
+          75% { opacity: 0.25; }
+        }
+      `;
+      document.head.appendChild(s);
+    }
+
+    // ============================================================
+    // Toast
+    // ============================================================
+    function showToast(message, icon = 'fas fa-info-circle') {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.innerHTML = `<i class="${icon}" style="color: var(--accent)"></i> ${message}`;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3200);
+    }
+
+    // ============================================================
+    // Keyboard shortcuts
+    // ============================================================
+    function initKeyboard() {
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          document.getElementById('searchInput').focus();
+        }
+        if (e.key === 'Escape') {
+          const input = document.getElementById('searchInput');
+          if (document.activeElement === input) {
+            input.value = '';
+            state.search = '';
+            renderGrid();
+            input.blur();
+          }
+        }
+      });
+    }
+
+    // ============================================================
+    // Smooth scroll for anchor links
+    // ============================================================
+    function initSmoothScroll() {
+      document.querySelectorAll('a[href^="#"]').forEach(a => {
+        a.addEventListener('click', (e) => {
+          const target = document.querySelector(a.getAttribute('href'));
+          if (target) {
+            e.preventDefault();
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
+    }
+
+    // ============================================================
+    // Init
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      renderPills();
+      renderGrid();
+      initViewToggle();
+      initSearch();
+      initParticles();
+      initKeyboard();
+      initSmoothScroll();
+
+      setTimeout(() => {
+        showToast(`Loaded ${APPS.length} apps from UsefulApps`, 'fas fa-rocket');
+      }, 900);
+    });
+  </script>
+</body>
+</html>
