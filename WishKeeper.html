@@ -306,15 +306,42 @@ async _api(p,m,b){
 },
 
 async _upl(body){
-  /* NO parents array needed — file goes directly into appDataFolder root */
-  const meta={name:'WishVault_data.json'};
-  const bnd='wv_bnd';
-  const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;
-  const r=await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',
-    {method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp}
+
+  const meta = {
+    name: 'WishVault_data.json',
+    parents: ['appDataFolder']
+  };
+
+  const bnd = 'wv_bnd';
+
+  const mp =
+`--${bnd}
+Content-Type: application/json; charset=UTF-8
+
+${JSON.stringify(meta)}
+--${bnd}
+Content-Type: application/json
+
+${body}
+--${bnd}--`;
+
+  const r = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method:'POST',
+      headers:{
+        Authorization:`Bearer ${this._at}`,
+        'Content-Type':`multipart/related; boundary=${bnd}`
+      },
+      body: mp
+    }
   );
-  if(!r.ok)throw new Error('Upload '+r.status);
+
+  if(!r.ok){
+    const txt = await r.text();
+    throw new Error(txt);
+  }
+
   return r.json();
 },
 
