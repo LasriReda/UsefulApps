@@ -167,17 +167,33 @@ apply(diff,mode){const s=S.get();let ni;if(mode==='replace'){ni=diff.ii;S.set({c
 
 /* ===== GOOGLE DRIVE SYNC ===== */
 const Sync={_at:null,_fid:null,_fli:null,_ol:null,
+
 init(){try{const m=JSON.parse(localStorage.getItem(SK.DM)||'{}');this._fid=m.fid||null;this._fli=m.fli||null}catch{}this.upc();this._ol=()=>{if(navigator.onLine){S.set({ss:this.cfg()?'synced':'offline'});this.try()}else S.set({ss:'offline'})};window.addEventListener('online',this._ol);window.addEventListener('offline',this._ol);S.set({ss:navigator.onLine?(this.cfg()?'synced':'offline'):'offline'});setInterval(()=>this.try(),3e5)},
+
 cfg(){return!!(GOOGLE_CLIENT_ID&&this._fid&&this._fli)},
 isAvailable(){return!!GOOGLE_CLIENT_ID},
+
+/* Decode JWT token to check what scopes it actually has */
+_checkToken(){
+  if(!this._at)return{ok:false,scopes:[],msg:'No token'};
+  try{
+    const parts=this._at.split('.');
+    if(parts.length!==3)return{ok:false,scopes:[],msg:'Invalid token format'};
+    const payload=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const scopes=(payload.scope||'').split(' ');
+    const hasAppData=scopes.includes('https://www.googleapis.com/auth/drive.appdata');
+    const hasFile=scopes.includes('https://www.googleapis.com/auth/drive.file');
+    return{ok:hasAppData,scopes,hasAppData,hasFile,msg:hasAppData?'OK':'WRONG SCOPE: has '+scopes.join(', ')};
+  }catch(e){return{ok:false,scopes:[],msg:'Cannot decode token: '+e.message}}
+},
 
 async auth(){
   if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured','warning');return false}
   if(typeof google==='undefined'||!google.accounts){TS.show('Sign-in blocked (ad blocker?)','danger');return false}
 
-  /* Revoke old token to invalidate it on Google's side */
+  /* Revoke old token directly via Google's endpoint (bypasses GIS cache) */
   if(this._at){
-    try{google.accounts.oauth2.revoke(this._at)}catch{}
+    try{await fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'}})}catch{}
     this._at=null;
   }
 
@@ -185,12 +201,27 @@ async auth(){
     google.accounts.oauth2.initTokenClient({
       client_id:GOOGLE_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/drive.appdata',
-      /* CRITICAL: force a fresh consent screen with the correct scope.
-         Without this, GIS silently reuses the old drive.file token */
+      /* Force fresh consent screen — prevents GIS from reusing cached token */
       prompt:'consent',
+      /* Force account picker — prevents GIS from auto-selecting cached account */
+      select_account:true,
       callback:r=>{
         if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false)}
-        else{this._at=r.access_token;res(true)}
+        else{
+          this._at=r.access_token;
+          /* Immediately verify the token has the correct scope */
+          const check=this._checkToken();
+          if(!check.ok){
+            console.error('Token scope check failed:',check.msg,'Scopes:',check.scopes);
+            TS.show('Wrong token scope received! Check console for details.','danger');
+            /* Revoke the bad token immediately */
+            try{fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'}})}catch{}
+            this._at=null;
+            res(false);
+          }else{
+            res(true);
+          }
+        }
       }
     }).requestAccessToken();
   });
@@ -199,7 +230,13 @@ async auth(){
 async setup(){
   if(!this._at)return false;
   try{
-    /* Step 1: Find or create the WishVault folder */
+    /* Double-check scope before attempting API calls */
+    const check=this._checkToken();
+    if(!check.ok){
+      TS.show('Token has wrong scope. Disconnect and try again.','danger');
+      return false;
+    }
+
     if(!this._fid){
       const fr=await this._api(
         'files?spaces=appDataFolder&q='+encodeURIComponent('name="WishVault" and mimeType="application/vnd.google-apps.folder"'),
@@ -208,7 +245,6 @@ async setup(){
       if(fr.files&&fr.files.length>0){
         this._fid=fr.files[0].id;
       }else{
-        /* Create in appDataFolder — spaces in BOTH query AND body */
         this._fid=(await this._api(
           'files?spaces=appDataFolder',
           'POST',
@@ -217,15 +253,12 @@ async setup(){
       }
     }
 
-    /* Step 2: Check if data file already exists */
     if(!this._fli){
       const fr=await this._api(
         'files?spaces=appDataFolder&q='+encodeURIComponent(`name="WishVault_data.json" and "${this._fid}" in parents`),
         'GET'
       );
-
       if(fr.files&&fr.files.length>0){
-        /* FILE EXISTS — another device created it, load and merge */
         this._fli=fr.files[0].id;
         try{
           const remoteData=await this._pull();
@@ -253,7 +286,6 @@ async setup(){
           }
         }catch(e){console.error('Pull during setup failed:',e)}
       }else{
-        /* NO FILE — first device, create with local data */
         const s=S.get();
         this._fli=(await this._upl(JSON.stringify({
           v:1,items:s.items,cats:s.cats,tags:s.tags,uat:new Date().toISOString()
@@ -268,36 +300,21 @@ async setup(){
     return false;
   }
 },
+
 async try(){if(!this.cfg()||!navigator.onLine)return;const pe=this.getUE();if(pe.length===0)return;S.set({ss:'syncing'});try{if(!this._at){if(!await this.auth()){S.set({ss:'pending'});return}if(!await this.setup()){S.set({ss:'pending'});return}}const rd=await this._pull();const s=S.get();const lm=new Map(s.items.map(i=>[i.id,i]));const rm=new Map((rd.items||[]).map(i=>[i.id,i]));pe.forEach(e=>{if(e.a==='d')rm.delete(e.id);else{const li=lm.get(e.id);if(li)rm.set(e.id,li)}});const mi=Array.from(rm.values());await this._push({v:1,items:mi,cats:s.cats,tags:s.tags,uat:new Date().toISOString()});S.set({items:mi});SS.si(mi);localStorage.setItem(SK.SL,'[]');this.upc();S.set({ss:'synced'})}catch(err){console.error(err);S.set({ss:'pending'});this._at=null}},
+
 async _pull(){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${this._fli}?alt=media`,{headers:{Authorization:`Bearer ${this._at}`}});if(!r.ok)throw new Error('Pull '+r.status);return r.json()},
 async _push(d){const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._fli}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('Push '+r.status);return r.json()},
-async _api(p,m,b){
-  const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};
-  if(b)o.body=JSON.stringify(b);
-  const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);
-  if(!r.ok)throw new Error('API '+r.status);
-  return r.json();
-},
-
-async _upl(body){
-  /* CRITICAL FIX: spaces in query string AND in metadata body */
-  const meta={name:'WishVault_data.json',parents:[this._fid]};
-  const bnd='wv_bnd';
-  const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;
-  const r=await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',
-    {method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp}
-  );
-  if(!r.ok)throw new Error('Upload '+r.status);
-  return r.json();
-},
+async _api(p,m,b){const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);if(!r.ok)throw new Error('API '+r.status);return r.json()},
+async _upl(body){const meta={name:'WishVault_data.json',parents:[this._fid]};const bnd='wv_bnd';const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',{method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp});if(!r.ok)throw new Error('Upload '+r.status);return r.json()},
 markUnsynced(ids,a='u'){const lg=JSON.parse(localStorage.getItem(SK.SL)||'[]');ids.forEach(id=>lg.push({id,a,t:new Date().toISOString()}));localStorage.setItem(SK.SL,JSON.stringify(lg));this.upc()},
 getUE(){return JSON.parse(localStorage.getItem(SK.SL)||'[]')},
 upc(){const c=this.getUE().length;S.set({pc:c});if(c>0&&navigator.onLine&&this.cfg())S.set({ss:'pending'});else if(c===0&&navigator.onLine)S.set({ss:'synced'})},
+
 disc(){
-  /* CRITICAL FIX: Revoke the token with Google so GIS can't reuse it */
   if(this._at){
-    try{google.accounts.oauth2.revoke(this._at)}catch{}
+    /* Revoke token directly via Google's endpoint */
+    try{fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'}})}catch{}
     this._at=null;
   }
   this._fid=null;
@@ -305,9 +322,9 @@ disc(){
   localStorage.removeItem(SK.DM);
   localStorage.removeItem(SK.SL);
   S.set({ss:navigator.onLine?'offline':'offline',pc:0});
-  TS.show('Disconnected from Google Drive','info');
-  /* Force page reload to fully clear the Google Identity Services cache */
-  setTimeout(()=>window.location.reload(),500);
+  TS.show('Disconnected','info');
+  /* Reload to fully clear Google Identity Services state */
+  setTimeout(()=>window.location.reload(),600);
 }
 };
 
