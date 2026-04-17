@@ -170,21 +170,51 @@ const Sync={_at:null,_fid:null,_fli:null,_ol:null,
 init(){try{const m=JSON.parse(localStorage.getItem(SK.DM)||'{}');this._fid=m.fid||null;this._fli=m.fli||null}catch{}this.upc();this._ol=()=>{if(navigator.onLine){S.set({ss:this.cfg()?'synced':'offline'});this.try()}else S.set({ss:'offline'})};window.addEventListener('online',this._ol);window.addEventListener('offline',this._ol);S.set({ss:navigator.onLine?(this.cfg()?'synced':'offline'):'offline'});setInterval(()=>this.try(),3e5)},
 cfg(){return!!(GOOGLE_CLIENT_ID&&this._fid&&this._fli)},
 isAvailable(){return!!GOOGLE_CLIENT_ID},
-async auth(){if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured by app owner','warning');return false}if(typeof google==='undefined'||!google.accounts){TS.show('Google sign-in library blocked (ad blocker?)','danger');return false}return new Promise(res=>{google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.appdata',callback:r=>{if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false)}else{this._at=r.access_token;res(true)}}}).requestAccessToken()})},
+
+async auth(){
+  if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured','warning');return false}
+  if(typeof google==='undefined'||!google.accounts){TS.show('Sign-in blocked (ad blocker?)','danger');return false}
+
+  /* CRITICAL FIX: Revoke any cached token first to force a fresh one */
+  if(this._at){
+    try{google.accounts.oauth2.revoke(this._at)}catch{}
+    this._at=null;
+  }
+
+  return new Promise(res=>{
+    google.accounts.oauth2.initTokenClient({
+      client_id:GOOGLE_CLIENT_ID,
+      scope:'https://www.googleapis.com/auth/drive.appdata',
+      callback:r=>{
+        if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false)}
+        else{this._at=r.access_token;res(true)}
+      }
+    }).requestAccessToken();
+  });
+},
+
 async setup(){
   if(!this._at)return false;
   try{
-    /* Step 1: Find or create the WishVault folder in appDataFolder */
+    /* Step 1: Find or create the WishVault folder */
     if(!this._fid){
       const fr=await this._api(
         'files?spaces=appDataFolder&q='+encodeURIComponent('name="WishVault" and mimeType="application/vnd.google-apps.folder"'),
         'GET'
       );
-      if(fr.files&&fr.files.length>0)this._fid=fr.files[0].id;
-      else this._fid=(await this._api('files?spaces=appDataFolder','POST',{name:'WishVault',mimeType:'application/vnd.google-apps.folder'})).id
+      if(fr.files&&fr.files.length>0){
+        this._fid=fr.files[0].id;
+      }else{
+        /* Create in appDataFolder — spaces in BOTH query AND body */
+        this._fid=(await this._api(
+          'files?spaces=appDataFolder',
+          'POST',
+          {name:'WishVault',mimeType:'application/vnd.google-apps.folder',spaces:['appDataFolder']}
+        )).id;
+      }
     }
 
-    /* Step 2: Check if data file already exists in that folder */
+    /* Step 2: Check if data file already exists */
     if(!this._fli){
       const fr=await this._api(
         'files?spaces=appDataFolder&q='+encodeURIComponent(`name="WishVault_data.json" and "${this._fid}" in parents`),
@@ -192,7 +222,7 @@ async setup(){
       );
 
       if(fr.files&&fr.files.length>0){
-        /* FILE EXISTS — another device already created it */
+        /* FILE EXISTS — another device created it, load and merge */
         this._fli=fr.files[0].id;
         try{
           const remoteData=await this._pull();
@@ -200,35 +230,27 @@ async setup(){
             const s=S.get();
             const localMap=new Map(s.items.map(i=>[i.id,i]));
             const remoteMap=new Map((remoteData.items||[]).map(i=>[i.id,i]));
-            /* Merge: for each remote item, add if new, update if newer */
             remoteData.items.forEach(ri=>{
               const local=localMap.get(ri.id);
-              if(!local){
-                /* New item from other device — add to local */
-                localMap.set(ri.id,ri);
-              }else{
-                /* Both exist — keep whichever was modified last */
+              if(!local)localMap.set(ri.id,ri);
+              else{
                 const lu=new Date(local.updatedAt||local.dateAdded).getTime();
                 const ru=new Date(ri.updatedAt||ri.dateAdded).getTime();
                 if(ru>lu)localMap.set(ri.id,ri);
               }
             });
-            /* Also bring in any categories/tags from remote */
-            const mergedItems=Array.from(localMap.values());
+            const merged=Array.from(localMap.values());
             S.set({
-              items:mergedItems,
+              items:merged,
               cats:Array.from(new Set([...s.cats,...(remoteData.cats||[])])),
               tags:Array.from(new Set([...s.tags,...(remoteData.tags||[])]))
             });
             SS.save();
             TS.show('Loaded data from Google Drive','success',null,3e3);
           }
-        }catch(e){
-          console.error('Pull during setup failed:',e);
-          /* Don't fail setup — just continue with local data */
-        }
+        }catch(e){console.error('Pull during setup failed:',e)}
       }else{
-        /* NO FILE EXISTS — first device, create it with local data */
+        /* NO FILE — first device, create with local data */
         const s=S.get();
         this._fli=(await this._upl(JSON.stringify({
           v:1,items:s.items,cats:s.cats,tags:s.tags,uat:new Date().toISOString()
@@ -236,7 +258,6 @@ async setup(){
       }
     }
 
-    /* Save folder and file IDs for future connections */
     localStorage.setItem(SK.DM,JSON.stringify({fid:this._fid,fli:this._fli}));
     return true;
   }catch(err){
@@ -247,9 +268,45 @@ async setup(){
 async try(){if(!this.cfg()||!navigator.onLine)return;const pe=this.getUE();if(pe.length===0)return;S.set({ss:'syncing'});try{if(!this._at){if(!await this.auth()){S.set({ss:'pending'});return}if(!await this.setup()){S.set({ss:'pending'});return}}const rd=await this._pull();const s=S.get();const lm=new Map(s.items.map(i=>[i.id,i]));const rm=new Map((rd.items||[]).map(i=>[i.id,i]));pe.forEach(e=>{if(e.a==='d')rm.delete(e.id);else{const li=lm.get(e.id);if(li)rm.set(e.id,li)}});const mi=Array.from(rm.values());await this._push({v:1,items:mi,cats:s.cats,tags:s.tags,uat:new Date().toISOString()});S.set({items:mi});SS.si(mi);localStorage.setItem(SK.SL,'[]');this.upc();S.set({ss:'synced'})}catch(err){console.error(err);S.set({ss:'pending'});this._at=null}},
 async _pull(){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${this._fli}?alt=media`,{headers:{Authorization:`Bearer ${this._at}`}});if(!r.ok)throw new Error('Pull '+r.status);return r.json()},
 async _push(d){const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._fli}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('Push '+r.status);return r.json()},
-async _api(p,m,b){const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);if(!r.ok)throw new Error('API '+r.status);return r.json()},
-async _upl(body){const meta={name:'WishVault_data.json',parents:[this._fid]};const bnd='wv_bnd';const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',{method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp});if(!r.ok)throw new Error('Upload '+r.status);return r.json()},
-markUnsynced(ids,a='u'){const lg=JSON.parse(localStorage.getItem(SK.SL)||'[]');ids.forEach(id=>lg.push({id,a,t:new Date().toISOString()}));localStorage.setItem(SK.SL,JSON.stringify(lg));this.upc()},getUE(){return JSON.parse(localStorage.getItem(SK.SL)||'[]')},upc(){const c=this.getUE().length;S.set({pc:c});if(c>0&&navigator.onLine&&this.cfg())S.set({ss:'pending'});else if(c===0&&navigator.onLine)S.set({ss:'synced'})},disc(){this._at=null;this._fid=null;this._fli=null;localStorage.removeItem(SK.DM);localStorage.removeItem(SK.SL);S.set({ss:navigator.onLine?'offline':'offline',pc:0});TS.show('Disconnected from Google Drive','info')}};
+async _api(p,m,b){
+  const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};
+  if(b)o.body=JSON.stringify(b);
+  const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);
+  if(!r.ok)throw new Error('API '+r.status);
+  return r.json();
+},
+
+async _upl(body){
+  /* CRITICAL FIX: spaces in query string AND in metadata body */
+  const meta={name:'WishVault_data.json',parents:[this._fid],spaces:['appDataFolder']};
+  const bnd='wv_bnd';
+  const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;
+  const r=await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',
+    {method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp}
+  );
+  if(!r.ok)throw new Error('Upload '+r.status);
+  return r.json();
+},
+markUnsynced(ids,a='u'){const lg=JSON.parse(localStorage.getItem(SK.SL)||'[]');ids.forEach(id=>lg.push({id,a,t:new Date().toISOString()}));localStorage.setItem(SK.SL,JSON.stringify(lg));this.upc()},
+getUE(){return JSON.parse(localStorage.getItem(SK.SL)||'[]')},
+upc(){const c=this.getUE().length;S.set({pc:c});if(c>0&&navigator.onLine&&this.cfg())S.set({ss:'pending'});else if(c===0&&navigator.onLine)S.set({ss:'synced'})},
+disc(){
+  /* CRITICAL FIX: Revoke the token with Google so GIS can't reuse it */
+  if(this._at){
+    try{google.accounts.oauth2.revoke(this._at)}catch{}
+    this._at=null;
+  }
+  this._fid=null;
+  this._fli=null;
+  localStorage.removeItem(SK.DM);
+  localStorage.removeItem(SK.SL);
+  S.set({ss:navigator.onLine?'offline':'offline',pc:0});
+  TS.show('Disconnected from Google Drive','info');
+  /* Force page reload to fully clear the Google Identity Services cache */
+  setTimeout(()=>window.location.reload(),500);
+}
+};
 
 /* ===== WISHLIST SERVICE ===== */
 const WL={add(d){const s=S.get();const dup=s.items.find(x=>{if(x.name.toLowerCase().trim()!==d.name.toLowerCase().trim())return false;if(x.averagePrice&&d.averagePrice)return Math.abs(x.averagePrice-d.averagePrice)/Math.max(x.averagePrice,.01)<.1;return true});if(dup)return{ok:false,dup:true,ex:dup};const now=new Date().toISOString();const ni={id:uuid(),name:d.name,averagePrice:d.averagePrice||null,currency:d.currency||'EUR',quantity:d.quantity||1,shopLink:d.shopLink||'',priority:d.priority||'medium',imageUrl:d.imageUrl||'',isBought:false,dateAdded:now,dateBought:null,category:d.category||'',tags:d.tags||[],eventDate:d.eventDate||null,isPriceDropFlagged:false,priceHistory:d.averagePrice?[{date:now,price:d.averagePrice}]:[],notes:d.notes||'',updatedAt:now};const items=[ni,...s.items];S.set({items,us:[...s.us.slice(-9),{items:s.items}]});SS.si(items);this._ud(d.category,d.tags);Sync.markUnsynced([ni.id],'c');return{ok:true,item:ni}},upd(id,u){const s=S.get();const idx=s.items.findIndex(i=>i.id===id);if(idx===-1)return null;const old=s.items[idx];const ni={...old,...u,updatedAt:new Date().toISOString()};if(u.averagePrice!==undefined&&u.averagePrice!==old.averagePrice&&u.averagePrice!=null)ni.priceHistory=[...(old.priceHistory||[]),{date:new Date().toISOString(),price:u.averagePrice}];const items=[...s.items];items[idx]=ni;S.set({items,us:[...s.us.slice(-9),{items:s.items}]});SS.si(items);this._ud(u.category,u.tags);Sync.markUnsynced([id]);return ni},del(ids){const s=S.get();const snap={items:s.items};const ni=s.items.filter(i=>!ids.includes(i.id));S.set({items:ni,us:[...s.us.slice(-9),snap],set:{...s.set,sids:s.set.sids.filter(id=>!ids.includes(id))}});SS.si(ni);ids.forEach(id=>Sync.markUnsynced([id],'d'));return snap},togB(id){const s=S.get();const it=s.items.find(i=>i.id===id);if(it)this.upd(id,{isBought:!it.isBought,dateBought:!it.isBought?new Date().toISOString():null})},logP(id,np){if(np!=null&&!isNaN(np))this.upd(id,{averagePrice:parseFloat(np)})},togPD(id){const s=S.get();const it=s.items.find(i=>i.id===id);if(it)this.upd(id,{isPriceDropFlagged:!it.isPriceDropFlagged})},bulk(ids,a,v){const s=S.get();const snap={items:s.items};let ni=[...s.items];ids.forEach(id=>{const idx=ni.findIndex(i=>i.id===id);if(idx===-1)return;switch(a){case'delete':ni.splice(idx,1);Sync.markUnsynced([id],'d');break;case'mb':ni[idx]={...ni[idx],isBought:true,dateBought:new Date().toISOString(),updatedAt:new Date().toISOString()};Sync.markUnsynced([id]);break;case'mu':ni[idx]={...ni[idx],isBought:false,dateBought:null,updatedAt:new Date().toISOString()};Sync.markUnsynced([id]);break;case'sc':ni[idx]={...ni[idx],category:v,updatedAt:new Date().toISOString()};Sync.markUnsynced([id]);break;case'sp':ni[idx]={...ni[idx],priority:v,updatedAt:new Date().toISOString()};Sync.markUnsynced([id]);break}});S.set({items:ni,us:[...s.us.slice(-9),snap],set:{...s.set,sids:[]}});SS.save();if(a==='sc'&&v)this._ud(v,[])},undo(){const s=S.get();if(!s.us.length)return;const snap=s.us[s.us.length-1];S.set({items:snap.items,us:s.us.slice(0,-1)});SS.si(snap.items);TS.show('Action undone','success',null,2e3)},filtered(){const s=S.get();let items=[...s.items];const now=new Date().toISOString();if(s.set.tab==='wishlist')items=items.filter(i=>!(i.isBought&&i.dateBought&&dbd(i.dateBought,now)>AD));else items=items.filter(i=>i.isBought&&i.dateBought&&dbd(i.dateBought,now)>AD);if(s.set.sq){const q=s.set.sq.toLowerCase();items=items.filter(i=>i.name.toLowerCase().includes(q)||(i.notes&&i.notes.toLowerCase().includes(q))||(i.tags&&i.tags.some(t=>t.toLowerCase().includes(q)))||(i.category&&i.category.toLowerCase().includes(q)))}if(s.set.fcat)items=items.filter(i=>i.category===s.set.fcat);if(s.set.fpri)items=items.filter(i=>i.priority===s.set.fpri);if(s.set.ftag)items=items.filter(i=>i.tags&&i.tags.includes(s.set.ftag));const sb=s.set.so,dr=s.set.sd==='asc'?1:-1;items.sort((a,b)=>{switch(sb){case'name':return dr*a.name.localeCompare(b.name);case'price':return dr*((a.averagePrice||0)-(b.averagePrice||0));case'priority':const o={urgent:0,high:1,medium:2,low:3};return dr*((o[a.priority]||2)-(o[b.priority]||2));default:return dr*(new Date(a.dateAdded)-new Date(b.dateAdded))}});return items},stats(){const s=S.get();const now=new Date();const tm=now.getMonth(),ty=now.getFullYear();const wa=new Date(now.getTime()-7*864e5);const wi=s.items.filter(i=>!i.isBought);const tv=wi.reduce((sm,i)=>sm+((i.averagePrice||0)*(i.quantity||1)),0);const bm=s.items.filter(i=>i.isBought&&i.dateBought&&(()=>{const d=new Date(i.dateBought);return d.getMonth()===tm&&d.getFullYear()===ty})()).length;const bw=s.items.filter(i=>i.isBought&&i.dateBought&&new Date(i.dateBought)>=wa).length;return{tw:wi.length,tv,bm,bw}},catStats(){const s=S.get();return s.cats.map(c=>{const ci=s.items.filter(i=>i.category===c);return{n:c,t:ci.length,b:ci.filter(i=>i.isBought).length}}).filter(c=>c.t>0)},badges(it){const b=[];const now=new Date().toISOString();if(!it.isBought&&it.dateAdded&&dbd(it.dateAdded,now)>SD)b.push({t:'stale',lb:'Stale'});if(it.isPriceDropFlagged)b.push({t:'drop',lb:'Price Drop'});if(it.eventDate&&iwd(it.eventDate,ED))b.push({t:'event',lb:'Event Soon'});return b},_ud(cat,tags){const s=S.get();let cats=[...s.cats];if(cat&&!cats.includes(cat))cats.push(cat);let tgs=[...s.tags];if(tags&&Array.isArray(tags))tags.forEach(t=>{if(t&&!tgs.includes(t))tgs.push(t)});S.set({cats,tags});SS.sc(cats);SS.st(tgs)},mgCat(old,nw,a){const s=S.get();let cats=[...s.cats],items=[...s.items];if(a==='rename'&&old&&nw){cats=cats.map(c=>c===old?nw:c);items=items.map(i=>i.category===old?{...i,category:nw}:i)}else if(a==='delete'&&old){cats=cats.filter(c=>c!==old);items=items.map(i=>i.category===old?{...i,category:''}:i)}else if(a==='create'&&nw&&!cats.includes(nw))cats.push(nw);S.set({cats,items});SS.save();Sync.markUnsynced(items.map(i=>i.id))},mgTag(tn,a){const s=S.get();let tgs=[...s.tags],items=[...s.items];if(a==='delete'){tgs=tgs.filter(t=>t!==tn);items=items.map(i=>({...i,tags:(i.tags||[]).filter(t=>t!==tn)}))}else if(a==='create'&&tn&&!tgs.includes(tn))tgs.push(tn);S.set({tags:tgs,items});SS.save();Sync.markUnsynced(items.map(i=>i.id))}};
