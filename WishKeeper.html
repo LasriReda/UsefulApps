@@ -209,7 +209,7 @@ async setup(){
         this._fid=(await this._api(
           'files?spaces=appDataFolder',
           'POST',
-          {name:'WishVault',mimeType:'application/vnd.google-apps.folder',spaces:['appDataFolder']}
+          {name:'WishVault',mimeType:'application/vnd.google-apps.folder'}
         )).id;
       }
     }
@@ -278,7 +278,7 @@ async _api(p,m,b){
 
 async _upl(body){
   /* CRITICAL FIX: spaces in query string AND in metadata body */
-  const meta={name:'WishVault_data.json',parents:[this._fid],spaces:['appDataFolder']};
+  const meta={name:'WishVault_data.json',parents:[this._fid]};
   const bnd='wv_bnd';
   const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;
   const r=await fetch(
