@@ -191,37 +191,36 @@ async auth(){
   if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured','warning');return false}
   if(typeof google==='undefined'||!google.accounts){TS.show('Sign-in blocked (ad blocker?)','danger');return false}
 
-  /* Revoke old token directly via Google's endpoint (bypasses GIS cache) */
-  if(this._at){
-    try{await fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'}})}catch{}
-    this._at=null;
-  }
+  this._at=null;
 
   return new Promise(res=>{
     google.accounts.oauth2.initTokenClient({
       client_id:GOOGLE_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/drive.appdata',
-      /* Force fresh consent screen — prevents GIS from reusing cached token */
       prompt:'consent',
-      /* Force account picker — prevents GIS from auto-selecting cached account */
       select_account:true,
       callback:r=>{
-        if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false)}
-        else{
-          this._at=r.access_token;
-          /* Immediately verify the token has the correct scope */
-          const check=this._checkToken();
-          if(!check.ok){
-            console.error('Token scope check failed:',check.msg,'Scopes:',check.scopes);
-            TS.show('Wrong token scope received! Check console for details.','danger');
-            /* Revoke the bad token immediately */
-            try{fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'}})}catch{}
-            this._at=null;
-            res(false);
-          }else{
+        if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false);return}
+        this._at=r.access_token;
+        /* Verify token has correct scope via Google's own endpoint (not JWT decode) */
+        fetch('https://oauth2.googleapis.com/tokeninfo',{headers:{Authorization:'Bearer '+this._at}})
+          .then(tr=>tr.json())
+          .then(td=>{
+            if(td.scope&&td.scope.includes('drive.appdata')){
+              res(true);
+            }else{
+              console.error('Token has wrong scope:',td.scope);
+              TS.show('Wrong scope received. Check your OAuth consent screen in Google Cloud Console.','danger');
+              fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST'}).catch(()=>{});
+              this._at=null;
+              res(false);
+            }
+          })
+          .catch(()=>{
+            /* If tokeninfo fails, try anyway — the API call will tell us if scope is wrong */
+            console.warn('Token verification failed, proceeding anyway');
             res(true);
-          }
-        }
+          });
       }
     }).requestAccessToken();
   });
