@@ -175,7 +175,7 @@ async auth(){
   if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured','warning');return false}
   if(typeof google==='undefined'||!google.accounts){TS.show('Sign-in blocked (ad blocker?)','danger');return false}
 
-  /* CRITICAL FIX: Revoke any cached token first to force a fresh one */
+  /* Revoke old token to invalidate it on Google's side */
   if(this._at){
     try{google.accounts.oauth2.revoke(this._at)}catch{}
     this._at=null;
@@ -185,6 +185,9 @@ async auth(){
     google.accounts.oauth2.initTokenClient({
       client_id:GOOGLE_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/drive.appdata',
+      /* CRITICAL: force a fresh consent screen with the correct scope.
+         Without this, GIS silently reuses the old drive.file token */
+      prompt:'consent',
       callback:r=>{
         if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false)}
         else{this._at=r.access_token;res(true)}
