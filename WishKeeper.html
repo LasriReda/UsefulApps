@@ -166,26 +166,20 @@ ij(file){const rd=new FileReader;rd.onload=e=>{try{const d=JSON.parse(e.target.r
 apply(diff,mode){const s=S.get();let ni;if(mode==='replace'){ni=diff.ii;S.set({cats:diff.ic,tags:diff.it})}else{const em=new Map(s.items.map(i=>[i.id,i]));diff.ii.forEach(x=>{if(!em.has(x.id))em.set(x.id,x);else{const ex=em.get(x.id);if(new Date(x.updatedAt||x.dateAdded).getTime()>new Date(ex.updatedAt||ex.dateAdded).getTime())em.set(x.id,x)}});ni=Array.from(em.values());S.set({cats:Array.from(new Set([...s.cats,...diff.ic])),tags:Array.from(new Set([...s.tags,...diff.it]))})}S.set({us:[...s.us.slice(-9),{items:s.items,cats:s.cats,tags:s.tags}]});S.set({items:ni});SS.save();Sync.markUnsynced(ni.map(i=>i.id));TS.show('Import complete ('+mode+')','success')}};let _id=null;
 
 /* ===== GOOGLE DRIVE SYNC ===== */
-const Sync={_at:null,_fid:null,_fli:null,_ol:null,
+const Sync={_at:null,_fli:null,_ol:null,
 
-init(){try{const m=JSON.parse(localStorage.getItem(SK.DM)||'{}');this._fid=m.fid||null;this._fli=m.fli||null}catch{}this.upc();this._ol=()=>{if(navigator.onLine){S.set({ss:this.cfg()?'synced':'offline'});this.try()}else S.set({ss:'offline'})};window.addEventListener('online',this._ol);window.addEventListener('offline',this._ol);S.set({ss:navigator.onLine?(this.cfg()?'synced':'offline'):'offline'});setInterval(()=>this.try(),3e5)},
-
-cfg(){return!!(GOOGLE_CLIENT_ID&&this._fid&&this._fli)},
-isAvailable(){return!!GOOGLE_CLIENT_ID},
-
-/* Decode JWT token to check what scopes it actually has */
-_checkToken(){
-  if(!this._at)return{ok:false,scopes:[],msg:'No token'};
-  try{
-    const parts=this._at.split('.');
-    if(parts.length!==3)return{ok:false,scopes:[],msg:'Invalid token format'};
-    const payload=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
-    const scopes=(payload.scope||'').split(' ');
-    const hasAppData=scopes.includes('https://www.googleapis.com/auth/drive.appdata');
-    const hasFile=scopes.includes('https://www.googleapis.com/auth/drive.file');
-    return{ok:hasAppData,scopes,hasAppData,hasFile,msg:hasAppData?'OK':'WRONG SCOPE: has '+scopes.join(', ')};
-  }catch(e){return{ok:false,scopes:[],msg:'Cannot decode token: '+e.message}}
+init(){
+  /* Only load the file ID, no folder ID needed */
+  try{const m=JSON.parse(localStorage.getItem(SK.DM)||'{}');this._fli=m.fli||null}catch{}
+  this.upc();
+  this._ol=()=>{if(navigator.onLine){S.set({ss:this.cfg()?'synced':'offline'});this.try()}else S.set({ss:'offline'})};
+  window.addEventListener('online',this._ol);window.addEventListener('offline',this._ol);
+  S.set({ss:navigator.onLine?(this.cfg()?'synced':'offline'):'offline'});
+  setInterval(()=>this.try(),3e5);
 },
+
+cfg(){return!!(GOOGLE_CLIENT_ID&&this._fli)},
+isAvailable(){return!!GOOGLE_CLIENT_ID},
 
 async auth(){
   if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured','warning');return false}
@@ -209,28 +203,14 @@ async auth(){
 async setup(){
   if(!this._at)return false;
   try{
-    if(!this._fid){
-      const fr=await this._api(
-        'files?spaces=appDataFolder&q='+encodeURIComponent('name="WishVault" and mimeType="application/vnd.google-apps.folder"'),
-        'GET'
-      );
-      if(fr.files&&fr.files.length>0){
-        this._fid=fr.files[0].id;
-      }else{
-        this._fid=(await this._api(
-          'files?spaces=appDataFolder',
-          'POST',
-          {name:'WishVault',mimeType:'application/vnd.google-apps.folder'}
-        )).id;
-      }
-    }
-
+    /* Search for our file directly in appDataFolder root (no folders!) */
     if(!this._fli){
       const fr=await this._api(
-        'files?spaces=appDataFolder&q='+encodeURIComponent(`name="WishVault_data.json" and "${this._fid}" in parents`),
+        'files?spaces=appDataFolder&q='+encodeURIComponent('name="WishVault_data.json"'),
         'GET'
       );
       if(fr.files&&fr.files.length>0){
+        /* File exists — another device already created it, load and merge */
         this._fli=fr.files[0].id;
         try{
           const remoteData=await this._pull();
@@ -257,6 +237,7 @@ async setup(){
           }
         }catch(e){console.error('Pull during setup failed:',e)}
       }else{
+        /* No file — first device, create it */
         const s=S.get();
         this._fli=(await this._upl(JSON.stringify({
           v:1,items:s.items,cats:s.cats,tags:s.tags,uat:new Date().toISOString()
@@ -264,49 +245,99 @@ async setup(){
       }
     }
 
-    localStorage.setItem(SK.DM,JSON.stringify({fid:this._fid,fli:this._fli}));
+    /* Save only the file ID — no folder ID needed */
+    localStorage.setItem(SK.DM,JSON.stringify({fli:this._fli}));
     return true;
   }catch(err){
-    /* Parse the error to give a specific message about scope issues */
     let msg='Drive setup failed';
     try{
       const errBody=await err.text();
       const errJson=JSON.parse(errBody);
-      if(errJson.error&&errJson.error.message){
-        msg=errJson.error.message;
-        if(errJson.error.reason==='insufficientPermissions'||errJson.error.reason==='insufficientScopes'){
-          msg='Wrong OAuth scope. Go to Google Cloud Console → OAuth consent screen → Scopes → remove "drive.file", add "drive.appdata" → Save → wait 5 min → try again.';
-        }
-      }
+      if(errJson.error&&errJson.error.message)msg=errJson.error.message;
     }catch{}
     TS.show(msg,'danger');
     return false;
   }
 },
 
-async try(){if(!this.cfg()||!navigator.onLine)return;const pe=this.getUE();if(pe.length===0)return;S.set({ss:'syncing'});try{if(!this._at){if(!await this.auth()){S.set({ss:'pending'});return}if(!await this.setup()){S.set({ss:'pending'});return}}const rd=await this._pull();const s=S.get();const lm=new Map(s.items.map(i=>[i.id,i]));const rm=new Map((rd.items||[]).map(i=>[i.id,i]));pe.forEach(e=>{if(e.a==='d')rm.delete(e.id);else{const li=lm.get(e.id);if(li)rm.set(e.id,li)}});const mi=Array.from(rm.values());await this._push({v:1,items:mi,cats:s.cats,tags:s.tags,uat:new Date().toISOString()});S.set({items:mi});SS.si(mi);localStorage.setItem(SK.SL,'[]');this.upc();S.set({ss:'synced'})}catch(err){console.error(err);S.set({ss:'pending'});this._at=null}},
+async try(){
+  if(!this.cfg()||!navigator.onLine)return;
+  const pe=this.getUE();
+  if(pe.length===0)return;
+  S.set({ss:'syncing'});
+  try{
+    if(!this._at){
+      if(!await this.auth()){S.set({ss:'pending'});return}
+      if(!await this.setup()){S.set({ss:'pending'});return}
+    }
+    const rd=await this._pull();
+    const s=S.get();
+    const lm=new Map(s.items.map(i=>[i.id,i]));
+    const rm=new Map((rd.items||[]).map(i=>[i.id,i]));
+    pe.forEach(e=>{if(e.a==='d')rm.delete(e.id);else{const li=lm.get(e.id);if(li)rm.set(e.id,li)}});
+    const mi=Array.from(rm.values());
+    await this._push({v:1,items:mi,cats:s.cats,tags:s.tags,uat:new Date().toISOString()});
+    S.set({items:mi});
+    SS.si(mi);
+    localStorage.setItem(SK.SL,'[]');
+    this.upc();
+    S.set({ss:'synced'});
+  }catch(err){console.error(err);S.set({ss:'pending'});this._at=null}
+},
 
-async _pull(){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${this._fli}?alt=media`,{headers:{Authorization:`Bearer ${this._at}`}});if(!r.ok)throw new Error('Pull '+r.status);return r.json()},
-async _push(d){const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._fli}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('Push '+r.status);return r.json()},
-async _api(p,m,b){const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);if(!r.ok)throw new Error('API '+r.status);return r.json()},
-async _upl(body){const meta={name:'WishVault_data.json',parents:[this._fid]};const bnd='wv_bnd';const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',{method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp});if(!r.ok)throw new Error('Upload '+r.status);return r.json()},
-markUnsynced(ids,a='u'){const lg=JSON.parse(localStorage.getItem(SK.SL)||'[]');ids.forEach(id=>lg.push({id,a,t:new Date().toISOString()}));localStorage.setItem(SK.SL,JSON.stringify(lg));this.upc()},
+async _pull(){
+  const r=await fetch(`https://www.googleapis.com/drive/v3/files/${this._fli}?alt=media`,{headers:{Authorization:`Bearer ${this._at}`}});
+  if(!r.ok)throw new Error('Pull '+r.status);
+  return r.json();
+},
+
+async _push(d){
+  const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._fli}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'},body:JSON.stringify(d)});
+  if(!r.ok)throw new Error('Push '+r.status);
+  return r.json();
+},
+
+async _api(p,m,b){
+  const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};
+  if(b)o.body=JSON.stringify(b);
+  const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);
+  if(!r.ok)throw new Error('API '+r.status);
+  return r.json();
+},
+
+async _upl(body){
+  /* NO parents array needed — file goes directly into appDataFolder root */
+  const meta={name:'WishVault_data.json'};
+  const bnd='wv_bnd';
+  const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;
+  const r=await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',
+    {method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp}
+  );
+  if(!r.ok)throw new Error('Upload '+r.status);
+  return r.json();
+},
+
+markUnsynced(ids,a='u'){
+  const lg=JSON.parse(localStorage.getItem(SK.SL)||'[]');
+  ids.forEach(id=>lg.push({id,a,t:new Date().toISOString()}));
+  localStorage.setItem(SK.SL,JSON.stringify(lg));
+  this.upc();
+},
+
 getUE(){return JSON.parse(localStorage.getItem(SK.SL)||'[]')},
 upc(){const c=this.getUE().length;S.set({pc:c});if(c>0&&navigator.onLine&&this.cfg())S.set({ss:'pending'});else if(c===0&&navigator.onLine)S.set({ss:'synced'})},
 
 disc(){
   if(this._at){
-    /* Revoke token directly via Google's endpoint */
     try{fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'}})}catch{}
     this._at=null;
   }
-  this._fid=null;
   this._fli=null;
   localStorage.removeItem(SK.DM);
   localStorage.removeItem(SK.SL);
   S.set({ss:navigator.onLine?'offline':'offline',pc:0});
   TS.show('Disconnected','info');
-  /* Reload to fully clear Google Identity Services state */
   setTimeout(()=>window.location.reload(),600);
 }
 };
