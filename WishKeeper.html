@@ -190,9 +190,7 @@ _checkToken(){
 async auth(){
   if(!GOOGLE_CLIENT_ID){TS.show('Google Drive not configured','warning');return false}
   if(typeof google==='undefined'||!google.accounts){TS.show('Sign-in blocked (ad blocker?)','danger');return false}
-
   this._at=null;
-
   return new Promise(res=>{
     google.accounts.oauth2.initTokenClient({
       client_id:GOOGLE_CLIENT_ID,
@@ -202,24 +200,7 @@ async auth(){
       callback:r=>{
         if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false);return}
         this._at=r.access_token;
-        /* Cache-busting parameter prevents browser from returning stale cached response */
-        fetch('https://oauth2.googleapis.com/tokeninfo?_='+Date.now(),{headers:{Authorization:'Bearer '+this._at}})
-          .then(tr=>tr.json())
-          .then(td=>{
-            if(td.scope&&td.scope.includes('drive.appdata')){
-              res(true);
-            }else{
-              console.error('Token has wrong scope:',td.scope);
-              TS.show('Wrong scope. Check OAuth consent screen in Google Cloud.','danger');
-              fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST'}).catch(()=>{});
-              this._at=null;
-              res(false);
-            }
-          })
-          .catch(()=>{
-            console.warn('Token verification failed, proceeding anyway');
-            res(true);
-          });
+        res(true);
       }
     }).requestAccessToken();
   });
@@ -228,13 +209,6 @@ async auth(){
 async setup(){
   if(!this._at)return false;
   try{
-    /* Double-check scope before attempting API calls */
-    const check=this._checkToken();
-    if(!check.ok){
-      TS.show('Token has wrong scope. Disconnect and try again.','danger');
-      return false;
-    }
-
     if(!this._fid){
       const fr=await this._api(
         'files?spaces=appDataFolder&q='+encodeURIComponent('name="WishVault" and mimeType="application/vnd.google-apps.folder"'),
@@ -263,7 +237,6 @@ async setup(){
           if(remoteData&&remoteData.items){
             const s=S.get();
             const localMap=new Map(s.items.map(i=>[i.id,i]));
-            const remoteMap=new Map((remoteData.items||[]).map(i=>[i.id,i]));
             remoteData.items.forEach(ri=>{
               const local=localMap.get(ri.id);
               if(!local)localMap.set(ri.id,ri);
@@ -294,7 +267,19 @@ async setup(){
     localStorage.setItem(SK.DM,JSON.stringify({fid:this._fid,fli:this._fli}));
     return true;
   }catch(err){
-    TS.show('Drive setup failed: '+err.message,'danger');
+    /* Parse the error to give a specific message about scope issues */
+    let msg='Drive setup failed';
+    try{
+      const errBody=await err.text();
+      const errJson=JSON.parse(errBody);
+      if(errJson.error&&errJson.error.message){
+        msg=errJson.error.message;
+        if(errJson.error.reason==='insufficientPermissions'||errJson.error.reason==='insufficientScopes'){
+          msg='Wrong OAuth scope. Go to Google Cloud Console → OAuth consent screen → Scopes → remove "drive.file", add "drive.appdata" → Save → wait 5 min → try again.';
+        }
+      }
+    }catch{}
+    TS.show(msg,'danger');
     return false;
   }
 },
