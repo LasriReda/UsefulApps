@@ -202,22 +202,21 @@ async auth(){
       callback:r=>{
         if(r.error){TS.show('Sign-in failed: '+r.error,'danger');res(false);return}
         this._at=r.access_token;
-        /* Verify token has correct scope via Google's own endpoint (not JWT decode) */
-        fetch('https://oauth2.googleapis.com/tokeninfo',{headers:{Authorization:'Bearer '+this._at}})
+        /* Cache-busting parameter prevents browser from returning stale cached response */
+        fetch('https://oauth2.googleapis.com/tokeninfo?_='+Date.now(),{headers:{Authorization:'Bearer '+this._at}})
           .then(tr=>tr.json())
           .then(td=>{
             if(td.scope&&td.scope.includes('drive.appdata')){
               res(true);
             }else{
               console.error('Token has wrong scope:',td.scope);
-              TS.show('Wrong scope received. Check your OAuth consent screen in Google Cloud Console.','danger');
+              TS.show('Wrong scope. Check OAuth consent screen in Google Cloud.','danger');
               fetch('https://oauth2.googleapis.com/revoke?token='+this._at,{method:'POST'}).catch(()=>{});
               this._at=null;
               res(false);
             }
           })
           .catch(()=>{
-            /* If tokeninfo fails, try anyway — the API call will tell us if scope is wrong */
             console.warn('Token verification failed, proceeding anyway');
             res(true);
           });
