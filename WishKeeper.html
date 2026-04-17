@@ -181,7 +181,7 @@ async setup(){
         'GET'
       );
       if(fr.files&&fr.files.length>0)this._fid=fr.files[0].id;
-      else this._fid=(await this._api('files','POST',{name:'WishVault',mimeType:'application/vnd.google-apps.folder'})).id
+      else this._fid=(await this._api('files?spaces=appDataFolder','POST',{name:'WishVault',mimeType:'application/vnd.google-apps.folder'})).id
     }
 
     /* Step 2: Check if data file already exists in that folder */
@@ -248,7 +248,7 @@ async try(){if(!this.cfg()||!navigator.onLine)return;const pe=this.getUE();if(pe
 async _pull(){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${this._fli}?alt=media`,{headers:{Authorization:`Bearer ${this._at}`}});if(!r.ok)throw new Error('Pull '+r.status);return r.json()},
 async _push(d){const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._fli}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw new Error('Push '+r.status);return r.json()},
 async _api(p,m,b){const o={method:m,headers:{Authorization:`Bearer ${this._at}`,'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);const r=await fetch(`https://www.googleapis.com/drive/v3/${p}`,o);if(!r.ok)throw new Error('API '+r.status);return r.json()},
-async _upl(body){const meta={name:'WishVault_data.json',parents:[this._fid]};const bnd='wv_bnd';const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp});if(!r.ok)throw new Error('Upload '+r.status);return r.json()},
+async _upl(body){const meta={name:'WishVault_data.json',parents:[this._fid]};const bnd='wv_bnd';const mp=`--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bnd}--`;const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&spaces=appDataFolder',{method:'POST',headers:{Authorization:`Bearer ${this._at}`,'Content-Type':`multipart/related; boundary=${bnd}`},body:mp});if(!r.ok)throw new Error('Upload '+r.status);return r.json()},
 markUnsynced(ids,a='u'){const lg=JSON.parse(localStorage.getItem(SK.SL)||'[]');ids.forEach(id=>lg.push({id,a,t:new Date().toISOString()}));localStorage.setItem(SK.SL,JSON.stringify(lg));this.upc()},getUE(){return JSON.parse(localStorage.getItem(SK.SL)||'[]')},upc(){const c=this.getUE().length;S.set({pc:c});if(c>0&&navigator.onLine&&this.cfg())S.set({ss:'pending'});else if(c===0&&navigator.onLine)S.set({ss:'synced'})},disc(){this._at=null;this._fid=null;this._fli=null;localStorage.removeItem(SK.DM);localStorage.removeItem(SK.SL);S.set({ss:navigator.onLine?'offline':'offline',pc:0});TS.show('Disconnected from Google Drive','info')}};
 
 /* ===== WISHLIST SERVICE ===== */
